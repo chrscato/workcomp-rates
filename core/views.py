@@ -65,15 +65,6 @@ def commercial_rate_insights_state(request, state_code):
         # Initialize data manager with state-specific file
         data_manager = ParquetDataManager(state=state_code)
         
-        # Check if this is a comparison request
-        if 'compare' in request.GET:
-            compare_data = json.loads(request.GET['compare'])
-            comparison_stats = data_manager.get_comparison_stats(
-                orgs=compare_data.get('orgs', []),
-                payers=compare_data.get('payers', [])
-            )
-            return JsonResponse(comparison_stats)
-        
         # Get active filters from request
         active_filters = {
             'payer': request.GET.get('payer'),
@@ -87,6 +78,8 @@ def commercial_rate_insights_state(request, state_code):
         
         # Remove empty filters
         active_filters = {k: v for k, v in active_filters.items() if v}
+        
+
         
         # Get filtered options for each field based on current selections
         filters = {
@@ -114,6 +107,12 @@ def commercial_rate_insights_state(request, state_code):
             'state_code': state_code,
             'state_name': ParquetDataManager.get_state_name(state_code)
         }
+        
+        # Debug logging
+        logger.info(f"State: {state_code}")
+        logger.info(f"Active filters: {active_filters}")
+        logger.info(f"Available organizations: {len(filters['organizations'])}")
+        logger.info(f"Available payers: {len(filters['payers'])}")
             
     except Exception as e:
         logger.error(f"Error in commercial_rate_insights_state view: {str(e)}")
@@ -136,74 +135,118 @@ def commercial_rate_insights(request):
 
 
 @login_required
-def commercial_rate_insights_compare(request):
-    """Side-by-side comparison of Commercial Rate Insights."""
-    data_manager = ParquetDataManager()
-    
-    # Get active filters from query params
-    active_filters = {
-        'procedure_set': request.GET.get('procedure_set', ''),
-        'procedure_class': request.GET.get('procedure_class', ''),
-        'procedure_group': request.GET.get('procedure_group', ''),
-        'cbsa': request.GET.get('cbsa', ''),
-        'billing_code': request.GET.get('billing_code', '')
-    }
-    
-    # Get selected entities from query params
-    selected_orgs = request.GET.getlist('orgs[]', [])
-    selected_payers = request.GET.getlist('payers[]', [])
-    
-    # Get filter options based on active filters
-    filters = {
-        'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
-        'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
-        'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
-        'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
-        'billing_codes': data_manager.get_unique_values('billing_code', active_filters)
-    }
-    
-    # Get all available orgs and payers for selection, filtered by active filters
-    all_orgs = data_manager.get_unique_values('org_name', active_filters)
-    all_payers = data_manager.get_unique_values('payer', active_filters)
-    
-    # Get data for each selected entity
-    entities_data = []
-    
-    # Process organizations
-    for org in selected_orgs:
-        # Combine org filter with active filters
-        org_filters = {**active_filters, 'org_name': org}
-        stats = data_manager.get_aggregated_stats(org_filters)
-        sample_records = data_manager.get_sample_records(org_filters, limit=5)
-        entities_data.append({
-            'name': org,
-            'type': 'organization',
-            'stats': stats,
-            'sample_records': sample_records
-        })
-    
-    # Process payers
-    for payer in selected_payers:
-        # Combine payer filter with active filters
-        payer_filters = {**active_filters, 'payer': payer}
-        stats = data_manager.get_aggregated_stats(payer_filters)
-        sample_records = data_manager.get_sample_records(payer_filters, limit=5)
-        entities_data.append({
-            'name': payer,
-            'type': 'payer',
-            'stats': stats,
-            'sample_records': sample_records
-        })
-    
-    context = {
-        'filters': filters,
-        'active_filters': active_filters,
-        'all_orgs': all_orgs,
-        'all_payers': all_payers,
-        'selected_orgs': selected_orgs,
-        'selected_payers': selected_payers,
-        'entities_data': entities_data,
-        'max_selections': 4  # Limit to 4 side-by-side comparisons
-    }
+def commercial_rate_insights_compare(request, state_code):
+    """
+    State-specific Commercial Rate Insights Comparison View
+    Shows side-by-side comparison of organizations and payers for a specific state
+    """
+    try:
+        # Validate state code
+        state_code = state_code.upper()
+        available_states = ParquetDataManager.get_available_states()
+        
+        if state_code not in available_states or available_states[state_code] != 'available':
+            context = {
+                'has_data': False,
+                'error_message': f'Sorry, {state_code} data is not available yet. Please try another state.',
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            return render(request, 'core/commercial_rate_insights_compare.html', context)
+        
+        # Initialize data manager with state-specific file
+        data_manager = ParquetDataManager(state=state_code)
+        
+        # Get active filters from request
+        active_filters = {
+            'payer': request.GET.get('payer'),
+            'org_name': request.GET.get('org_name'),
+            'procedure_set': request.GET.get('procedure_set'),
+            'procedure_class': request.GET.get('procedure_class'),
+            'procedure_group': request.GET.get('procedure_group'),
+            'cbsa': request.GET.get('cbsa'),
+            'billing_code': request.GET.get('billing_code')
+        }
+        
+        # Remove empty filters
+        active_filters = {k: v for k, v in active_filters.items() if v}
+        
+        # Get selected entities for comparison
+        compare_orgs = request.GET.getlist('compare_orgs[]', [])
+        compare_payers = request.GET.getlist('compare_payers[]', [])
+        
+        # Get comparison data
+        comparison_data = []
+        if compare_orgs or compare_payers:
+            # Process organizations
+            for org in compare_orgs:
+                # Combine org filter with active filters
+                org_filters = {**active_filters, 'org_name': org}
+                stats = data_manager.get_aggregated_stats(org_filters)
+                sample_records = data_manager.get_sample_records(org_filters, limit=5)
+                comparison_data.append({
+                    'name': org,
+                    'type': 'organization',
+                    'stats': stats,
+                    'sample_records': sample_records
+                })
+            
+            # Process payers
+            for payer in compare_payers:
+                # Combine payer filter with active filters
+                payer_filters = {**active_filters, 'payer': payer}
+                stats = data_manager.get_aggregated_stats(payer_filters)
+                sample_records = data_manager.get_sample_records(payer_filters, limit=5)
+                comparison_data.append({
+                    'name': payer,
+                    'type': 'payer',
+                    'stats': stats,
+                    'sample_records': sample_records
+                })
+        
+        # Get filtered options for each field based on current selections
+        filters = {
+            'payers': data_manager.get_unique_values('payer', active_filters),
+            'organizations': data_manager.get_unique_values('org_name', active_filters),
+            'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
+            'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
+            'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
+            'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
+            'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+        }
+        
+        # Get base state statistics (without comparison filters)
+        base_stats = data_manager.get_aggregated_stats(active_filters)
+        
+        context = {
+            'filters': filters,
+            'base_stats': base_stats,
+            'active_filters': active_filters,
+            'comparison_data': comparison_data,
+            'compare_orgs_selected': compare_orgs,
+            'compare_payers_selected': compare_payers,
+            'has_data': True,
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code)
+        }
+        
+        # Debug logging
+        logger.info(f"Compare view - State: {state_code}")
+        logger.info(f"Active filters: {active_filters}")
+        logger.info(f"Compare orgs: {compare_orgs}")
+        logger.info(f"Compare payers: {compare_payers}")
+        logger.info(f"Comparison data count: {len(comparison_data)}")
+            
+    except Exception as e:
+        logger.error(f"Error in commercial_rate_insights_compare view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while processing the comparison data.',
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code)
+        }
     
     return render(request, 'core/commercial_rate_insights_compare.html', context)
+
+
+

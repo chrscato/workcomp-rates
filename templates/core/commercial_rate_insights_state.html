@@ -27,9 +27,9 @@
                             <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-secondary me-2">
                                 <i class="fas fa-map"></i> Back to Map
                             </a>
-                            <a href="{% url 'commercial_rate_insights_compare' %}" class="btn btn-outline-primary">
-                                <i class="fas fa-columns"></i> Compare Organizations/Payers
-                            </a>
+                                                         <a href="{% url 'commercial_rate_insights_compare' state_code %}" class="btn btn-outline-primary">
+                                 <i class="fas fa-columns"></i> Compare Organizations/Payers
+                             </a>
                         </div>
                     </div>
                     <div class="card-body">
@@ -249,6 +249,8 @@
             </div>
         </div>
 
+
+
     {% else %}
         <div class="row">
             <div class="col-12">
@@ -284,6 +286,7 @@
         .filter-error {
             border-color: red;
         }
+
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -326,6 +329,8 @@
             $('.select2-dropdown').on('select2:select select2:unselect', function() {
                 submitForm();
             });
+
+
         });
     </script>
     {% endblock %}

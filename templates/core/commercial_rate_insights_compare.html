@@ -2,311 +2,569 @@
 {% load static %}
 {% load humanize %}
 
-{% block title %}Rate Comparison - WorkComp Rates{% endblock %}
+{% block title %}{{ state_name }} Comparison - WorkComp Rates{% endblock %}
 
 {% block extra_head %}
-<!-- jQuery and Select2 for searchable dropdowns -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- Select2 for enhanced dropdowns -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!-- Plotly for data visualization -->
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Selection Form -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h4>Commercial Rate Insights Comparison</h4>
-                    <p class="text-muted">Select up to {{ max_selections }} organizations and/or payers to compare side by side.</p>
-                </div>
-                <div class="card-body">
-                    <form method="get" id="compareForm">
-                        <!-- Filters -->
-                        <div class="row mb-3">
-                            <div class="col-md-2">
+<div class="container-fluid py-4">
+    {% if has_data %}
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">{{ state_name }} Rate Comparison</h4>
+                            <p class="text-muted mb-0">Compare organizations and payers side by side</p>
+                        </div>
+                        <div>
+                            <a href="{% url 'commercial_rate_insights_state' state_code %}" class="btn btn-outline-secondary me-2">
+                                <i class="fas fa-arrow-left"></i> Back to State Insights
+                            </a>
+                            <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-map"></i> Back to Map
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" class="row g-3" id="filterForm">
+                            <!-- Payer Filter -->
+                            <div class="col-md-3">
+                                <label for="payer" class="form-label">Payer</label>
+                                <select class="form-select filter-select select2-dropdown" id="payer" name="payer" data-filter="payer">
+                                    <option value="">All Payers</option>
+                                    {% for payer in filters.payers %}
+                                        <option value="{{ payer }}" {% if payer == active_filters.payer %}selected{% endif %}>{{ payer }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Organization Filter -->
+                            <div class="col-md-3">
+                                <label for="org_name" class="form-label">Organization</label>
+                                <select class="form-select filter-select select2-dropdown" id="org_name" name="org_name" data-filter="org_name">
+                                    <option value="">All Organizations</option>
+                                    {% for org in filters.organizations %}
+                                        <option value="{{ org }}" {% if org == active_filters.org_name %}selected{% endif %}>{{ org }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Procedure Set Filter -->
+                            <div class="col-md-3">
                                 <label for="procedure_set" class="form-label">Procedure Set</label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set">
+                                <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set" data-filter="procedure_set">
                                     <option value="">All Sets</option>
                                     {% for set in filters.procedure_sets %}
                                         <option value="{{ set }}" {% if set == active_filters.procedure_set %}selected{% endif %}>{{ set }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            
+                            <!-- Procedure Class Filter -->
+                            <div class="col-md-3">
                                 <label for="procedure_class" class="form-label">Procedure Class</label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class">
+                                <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class">
                                     <option value="">All Classes</option>
                                     {% for class in filters.procedure_classes %}
                                         <option value="{{ class }}" {% if class == active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            
+                            <!-- Procedure Group Filter -->
+                            <div class="col-md-4">
                                 <label for="procedure_group" class="form-label">Procedure Group</label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group">
+                                <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group">
                                     <option value="">All Groups</option>
                                     {% for group in filters.procedure_groups %}
                                         <option value="{{ group }}" {% if group == active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            
+                            <!-- CBSA Filter -->
+                            <div class="col-md-3">
                                 <label for="cbsa" class="form-label">CBSA Region</label>
-                                <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa">
+                                <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa">
                                     <option value="">All Regions</option>
                                     {% for region in filters.cbsa_regions %}
                                         <option value="{{ region }}" {% if region == active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            
+                            <!-- Billing Code Filter -->
+                            <div class="col-md-3">
                                 <label for="billing_code" class="form-label">Billing Code</label>
-                                <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code">
+                                <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code">
                                     <option value="">All Codes</option>
                                     {% for code in filters.billing_codes %}
                                         <option value="{{ code }}" {% if code == active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
-                        </div>
-
-                        <!-- Organization Selection -->
-                        <div class="row mb-3">
+                            
                             <div class="col-12">
-                                <h6>Organizations</h6>
-                                <div class="row">
-                                    {% for org in all_orgs %}
-                                    <div class="col-md-3 mb-2">
-                                        <div class="form-check">
-                                            <input class="form-check-input org-checkbox" type="checkbox" name="orgs[]" value="{{ org }}" id="org_{{ forloop.counter }}" 
-                                                   {% if org in selected_orgs %}checked{% endif %}>
-                                            <label class="form-check-label" for="org_{{ forloop.counter }}">
-                                                {{ org }}
-                                            </label>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
+                                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                                <a href="{% url 'commercial_rate_insights_compare' state_code %}" class="btn btn-outline-secondary">Reset</a>
                             </div>
-                        </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                        <!-- Payer Selection -->
-                        <div class="row mb-3">
-                            <div class="col-12">
-                                <h6>Payers</h6>
-                                <div class="row">
-                                    {% for payer in all_payers %}
-                                    <div class="col-md-3 mb-2">
-                                        <div class="form-check">
-                                            <input class="form-check-input payer-checkbox" type="checkbox" name="payers[]" value="{{ payer }}" id="payer_{{ forloop.counter }}"
-                                                   {% if payer in selected_payers %}checked{% endif %}>
-                                            <label class="form-check-label" for="payer_{{ forloop.counter }}">
-                                                {{ payer }}
-                                            </label>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-
+        <!-- Base State Statistics -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">{{ state_name }} Base Statistics</h5>
+                        <p class="text-muted mb-0">Overall state statistics with current filters</p>
+                    </div>
+                    <div class="card-body">
                         <div class="row">
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-primary">Compare Selected</button>
-                                <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-secondary">Back to Insights</a>
+                            <!-- Professional Rates -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Professional Rates</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Avg Rate:</strong></p>
+                                        <p class="text-muted">${{ base_stats.professional.avg_rate|floatformat:0|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Records:</strong></p>
+                                        <p class="text-muted">{{ base_stats.professional.record_count|intcomma }}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>GA Prof:</strong></p>
+                                        <p class="text-muted">${{ base_stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
+                                        <p class="text-muted small">{{ base_stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Medicare:</strong></p>
+                                        <p class="text-muted">${{ base_stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
+                                        <p class="text-muted small">{{ base_stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Facility Rates -->
+                            <div class="col-md-6">
+                                <h6 class="text-info">Facility Rates</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Avg Rate:</strong></p>
+                                        <p class="text-muted">${{ base_stats.facility.avg_rate|floatformat:0|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Records:</strong></p>
+                                        <p class="text-muted">{{ base_stats.facility.record_count|intcomma }}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
+                                        <p class="text-muted">${{ base_stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
+                                        <p class="text-muted">${{ base_stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
+                                        <p class="text-muted">${{ base_stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
+                                        <p class="text-muted">${{ base_stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Comparison Results -->
-    {% if entities_data %}
-    <div class="comparison-grid">
-        {% for entity in entities_data %}
-        <div class="comparison-card">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">{{ entity.name }}</h5>
-                <span class="badge bg-{% if entity.type == 'organization' %}primary{% else %}info{% endif %}">
-                    {{ entity.type|title }}
-                </span>
-            </div>
-            
-            <!-- Professional Stats -->
-            <div class="mb-3">
-                <h6 class="text-primary">Professional Rates</h6>
-                <div class="row">
-                    <div class="col-6">
-                        <p class="mb-1"><strong>Avg Rate:</strong></p>
-                        <p class="text-muted">${{ entity.stats.professional.avg_rate|floatformat:0|intcomma }}</p>
+        <!-- Comparison Selection -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Select Entities to Compare</h5>
+                        <p class="text-muted mb-0">Choose up to 4 organizations and/or payers to compare side by side</p>
                     </div>
-                    <div class="col-6">
-                        <p class="mb-1"><strong>Records:</strong></p>
-                        <p class="text-muted">{{ entity.stats.professional.record_count|intcomma }}</p>
+                    <div class="card-body">
+                        <form method="get" id="compareForm">
+                            <!-- Preserve existing filters -->
+                            <input type="hidden" name="payer" value="{{ active_filters.payer|default:'' }}">
+                            <input type="hidden" name="org_name" value="{{ active_filters.org_name|default:'' }}">
+                            <input type="hidden" name="procedure_set" value="{{ active_filters.procedure_set|default:'' }}">
+                            <input type="hidden" name="procedure_class" value="{{ active_filters.procedure_class|default:'' }}">
+                            <input type="hidden" name="procedure_group" value="{{ active_filters.procedure_group|default:'' }}">
+                            <input type="hidden" name="cbsa" value="{{ active_filters.cbsa|default:'' }}">
+                            <input type="hidden" name="billing_code" value="{{ active_filters.billing_code|default:'' }}">
+                            
+                            <!-- Organization Selection -->
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <h6>Organizations ({{ filters.organizations|length }} available)</h6>
+                                    {% if filters.organizations %}
+                                    <div class="row">
+                                        {% for org in filters.organizations %}
+                                        <div class="col-md-3 mb-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input org-checkbox" type="checkbox" name="compare_orgs[]" value="{{ org }}" id="compare_org_{{ forloop.counter }}"
+                                                       {% if org in compare_orgs_selected %}checked{% endif %}>
+                                                <label class="form-check-label" for="compare_org_{{ forloop.counter }}">
+                                                    {{ org }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted">No organizations available for comparison.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Payer Selection -->
+                            <div class="row mb-3">
+                                <div class="col-12">
+                                    <h6>Payers ({{ filters.payers|length }} available)</h6>
+                                    {% if filters.payers %}
+                                    <div class="row">
+                                        {% for payer in filters.payers %}
+                                        <div class="col-md-3 mb-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input payer-checkbox" type="checkbox" name="compare_payers[]" value="{{ payer }}" id="compare_payer_{{ forloop.counter }}"
+                                                       {% if payer in compare_payers_selected %}checked{% endif %}>
+                                                <label class="form-check-label" for="compare_payer_{{ forloop.counter }}">
+                                                    {{ payer }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted">No payers available for comparison.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary">Compare Selected</button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="clearCompareSelections()">Clear All</button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-6">
-                        <p class="mb-1"><strong>GA Prof:</strong></p>
-                        <p class="text-muted">${{ entity.stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
-                        <p class="text-muted small">{{ entity.stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
-                    </div>
-                    <div class="col-6">
-                        <p class="mb-1"><strong>Medicare:</strong></p>
-                        <p class="text-muted">${{ entity.stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
-                        <p class="text-muted small">{{ entity.stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Facility Stats -->
-            <div class="mb-3">
-                <h6 class="text-info">Facility Rates</h6>
-                <div class="row">
-                    <div class="col-6">
-                        <p class="mb-1"><strong>Avg Rate:</strong></p>
-                        <p class="text-muted">${{ entity.stats.facility.avg_rate|floatformat:0|intcomma }}</p>
-                    </div>
-                    <div class="col-6">
-                        <p class="mb-1"><strong>Records:</strong></p>
-                        <p class="text-muted">{{ entity.stats.facility.record_count|intcomma }}</p>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-6">
-                        <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
-                        <p class="text-muted">${{ entity.stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
-                    </div>
-                    <div class="col-6">
-                        <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
-                        <p class="text-muted">${{ entity.stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-6">
-                        <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
-                        <p class="text-muted">${{ entity.stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
-                    </div>
-                    <div class="col-6">
-                        <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
-                        <p class="text-muted">${{ entity.stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Sample Records -->
-            {% if entity.sample_records %}
-            <div>
-                <h6 class="text-secondary">Sample Records</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Rate</th>
-                                <th>GA Prof</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in entity.sample_records %}
-                            <tr>
-                                <td>{{ record.billing_code }}</td>
-                                <td>${{ record.rate|floatformat:2|intcomma }}</td>
-                                <td>${{ record.ga_prof_mar|floatformat:2|intcomma|default:"-" }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
                 </div>
             </div>
-            {% endif %}
         </div>
-        {% endfor %}
-    </div>
+
+        <!-- Comparison Results -->
+        {% if comparison_data %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Comparison Results</h5>
+                        <p class="text-muted mb-0">Side-by-side comparison of selected entities</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="comparison-grid">
+                            {% for entity in comparison_data %}
+                            <div class="comparison-card">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">{{ entity.name }}</h5>
+                                    <span class="badge bg-{% if entity.type == 'organization' %}primary{% else %}info{% endif %}">
+                                        {{ entity.type|title }}
+                                    </span>
+                                </div>
+                                
+                                <!-- Professional Stats -->
+                                <div class="mb-3">
+                                    <h6 class="text-primary">Professional Rates</h6>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Avg Rate:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.professional.avg_rate|floatformat:0|intcomma }}</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Records:</strong></p>
+                                            <p class="text-muted">{{ entity.stats.professional.record_count|intcomma }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>GA Prof:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
+                                            <p class="text-muted small">{{ entity.stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Medicare:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
+                                            <p class="text-muted small">{{ entity.stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Facility Stats -->
+                                <div class="mb-3">
+                                    <h6 class="text-info">Facility Rates</h6>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Avg Rate:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.facility.avg_rate|floatformat:0|intcomma }}</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>Records:</strong></p>
+                                            <p class="text-muted">{{ entity.stats.facility.record_count|intcomma }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
+                                            <p class="text-muted">${{ entity.stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Sample Records -->
+                                {% if entity.sample_records %}
+                                <div>
+                                    <h6 class="text-secondary">Sample Records</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Code</th>
+                                                    <th>Rate</th>
+                                                    <th>GA Prof</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for record in entity.sample_records %}
+                                                <tr>
+                                                    <td>{{ record.billing_code }}</td>
+                                                    <td>${{ record.rate|floatformat:2|intcomma }}</td>
+                                                    <td>${{ record.ga_prof_mar|floatformat:2|intcomma|default:"-" }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- No Comparison Data -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="text-muted mb-3">
+                            <i class="fas fa-chart-bar"></i>
+                            No Comparison Data
+                        </h5>
+                        <p class="text-muted mb-4">
+                            Select organizations and/or payers above to see comparison results.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 class="text-warning mb-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            {{ error_message }}
+                        </h3>
+                        <p class="text-muted mb-4">
+                            The data for {{ state_name }} ({{ state_code }}) is not currently available.
+                        </p>
+                        <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-primary">
+                            <i class="fas fa-map"></i> Back to State Map
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
     {% endif %}
 </div>
 
-<!-- Initialize filters and comparison -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize Select2 for all filter dropdowns
-        $('.select2-dropdown').select2({
-            placeholder: 'Type to search...',
-            allowClear: true,
-            width: '100%',
-            minimumInputLength: 0,
-            templateResult: function(data) {
-                if (data.loading) return data.text;
-                if (!data.id) return data.text;
-                return $('<span>' + data.text + '</span>');
-            },
-            templateSelection: function(data) {
-                if (!data.id) return data.text;
-                return data.text;
-            }
-        });
-        
-        // Filter Logic
-        const filterForm = document.getElementById('compareForm');
-        const filterSelects = document.querySelectorAll('.filter-select');
-        
-        // Function to submit form
-        function submitForm() {
-            filterForm.submit();
+{% if has_data %}
+    {% block extra_js %}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <style>
+        .filter-loading {
+            opacity: 0.5;
+            pointer-events: none;
         }
-
-        // Add change event listeners to all filters
-        filterSelects.forEach(select => {
-            select.addEventListener('change', () => {
-                submitForm();  // Submit form immediately on any filter change
+        .filter-error {
+            border-color: red;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .comparison-card {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1.5rem;
+            background-color: #fff;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        .comparison-card h5 {
+            color: #495057;
+            font-size: 1.1rem;
+        }
+        .comparison-card h6 {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .comparison-card .table-sm th,
+        .comparison-card .table-sm td {
+            padding: 0.25rem;
+            font-size: 0.875rem;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Select2 for all filter dropdowns
+            $('.select2-dropdown').select2({
+                placeholder: 'Type to search...',
+                allowClear: true,
+                width: '100%',
+                minimumInputLength: 0,
+                templateResult: function(data) {
+                    if (data.loading) return data.text;
+                    if (!data.id) return data.text;
+                    return $('<span>' + data.text + '</span>');
+                },
+                templateSelection: function(data) {
+                    if (!data.id) return data.text;
+                    return data.text;
+                }
             });
-        });
-
-        // Handle Select2 change events
-        $('.select2-dropdown').on('select2:select select2:unselect', function() {
-            submitForm();
-        });
-
-        // Comparison Logic
-        const orgCheckboxes = document.querySelectorAll('.org-checkbox');
-        const payerCheckboxes = document.querySelectorAll('.payer-checkbox');
-        const maxSelections = {{ max_selections }};
-
-        function updateCheckboxStates() {
-            const checkedOrgs = document.querySelectorAll('.org-checkbox:checked').length;
-            const checkedPayers = document.querySelectorAll('.payer-checkbox:checked').length;
-            const totalChecked = checkedOrgs + checkedPayers;
             
-            // Disable unchecked checkboxes if max selections reached
-            if (totalChecked >= maxSelections) {
+            // Filter Logic
+            const filterForm = document.getElementById('filterForm');
+            const filterSelects = document.querySelectorAll('.filter-select');
+            
+            // Function to submit form
+            function submitForm() {
+                const formData = new FormData(filterForm);
+                const params = new URLSearchParams(formData);
+                window.location.href = `${window.location.pathname}?${params.toString()}`;
+            }
+
+            // Add change event listeners to all filters
+            filterSelects.forEach(select => {
+                select.addEventListener('change', () => {
+                    submitForm();  // Submit form immediately on any filter change
+                });
+            });
+
+            // Handle Select2 change events
+            $('.select2-dropdown').on('select2:select select2:unselect', function() {
+                submitForm();
+            });
+
+            // Comparison Logic
+            const orgCheckboxes = document.querySelectorAll('.org-checkbox');
+            const payerCheckboxes = document.querySelectorAll('.payer-checkbox');
+            const maxSelections = 4;
+
+            function updateCheckboxStates() {
+                const checkedOrgs = document.querySelectorAll('.org-checkbox:checked').length;
+                const checkedPayers = document.querySelectorAll('.payer-checkbox:checked').length;
+                const totalChecked = checkedOrgs + checkedPayers;
+                
+                // Disable unchecked checkboxes if max selections reached
+                if (totalChecked >= maxSelections) {
+                    orgCheckboxes.forEach(cb => {
+                        if (!cb.checked) cb.disabled = true;
+                    });
+                    payerCheckboxes.forEach(cb => {
+                        if (!cb.checked) cb.disabled = true;
+                    });
+                } else {
+                    // Enable all checkboxes
+                    orgCheckboxes.forEach(cb => cb.disabled = false);
+                    payerCheckboxes.forEach(cb => cb.disabled = false);
+                }
+            }
+
+            // Add event listeners to checkboxes
+            orgCheckboxes.forEach(cb => {
+                cb.addEventListener('change', updateCheckboxStates);
+            });
+            
+            payerCheckboxes.forEach(cb => {
+                cb.addEventListener('change', updateCheckboxStates);
+            });
+
+            // Initialize checkbox states
+            updateCheckboxStates();
+
+            // Clear compare selections function
+            window.clearCompareSelections = function() {
                 orgCheckboxes.forEach(cb => {
-                    if (!cb.checked) cb.disabled = true;
+                    cb.checked = false;
+                    cb.disabled = false;
                 });
                 payerCheckboxes.forEach(cb => {
-                    if (!cb.checked) cb.disabled = true;
+                    cb.checked = false;
+                    cb.disabled = false;
                 });
-            } else {
-                // Enable all checkboxes
-                orgCheckboxes.forEach(cb => cb.disabled = false);
-                payerCheckboxes.forEach(cb => cb.disabled = false);
-            }
-        }
-
-        // Add event listeners to checkboxes
-        orgCheckboxes.forEach(cb => {
-            cb.addEventListener('change', updateCheckboxStates);
+            };
         });
-        
-        payerCheckboxes.forEach(cb => {
-            cb.addEventListener('change', updateCheckboxStates);
-        });
-
-        // Initialize checkbox states
-        updateCheckboxStates();
-    });
-</script>
+    </script>
+    {% endblock %}
+{% endif %}
 {% endblock %}
