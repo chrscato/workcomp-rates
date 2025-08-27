@@ -16,9 +16,7 @@
                         <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary btn-lg me-3">
                             <i class="bi bi-graph-up-arrow me-2"></i>View Rate Insights
                         </a>
-                        <a href="{% url 'commercial_rate_insights_compare' %}" class="btn btn-outline-primary btn-lg">
-                            <i class="bi bi-bar-chart me-2"></i>Compare Rates
-                        </a>
+                        <!-- Removed the compare button since it requires a state code -->
                     </div>
                 </div>
             </div>
@@ -46,9 +44,9 @@
                     <div class="mb-3">
                         <i class="bi bi-bar-chart text-info" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Side-by-Side Comparison</h5>
-                    <p class="card-text">Compare rates across multiple organizations and payers to identify competitive advantages.</p>
-                    <a href="{% url 'commercial_rate_insights_compare' %}" class="btn btn-outline-info">Start Comparing</a>
+                    <h5 class="card-title">Interactive State Map</h5>
+                    <p class="card-text">Click on any state to view detailed rate insights and comparisons for that specific state.</p>
+                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-info">View Map</a>
                 </div>
             </div>
         </div>
