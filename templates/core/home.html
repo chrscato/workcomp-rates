@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Home - WorkComp Rates{% endblock %}
+{% block title %}TIN-Specific Commercial Rates - Competitive Intelligence{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -10,13 +10,13 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body text-center">
-                    <h1 class="display-4 text-primary mb-3">Welcome to WorkComp Rates</h1>
-                    <p class="lead text-muted">Professional workers' compensation rate analysis and insights platform</p>
+                    <h1 class="display-4 text-primary mb-3">TIN-Specific Commercial Rates</h1>
+                    <p class="lead text-muted">Competitive intelligence tool to understand how commercial payers like UnitedHealthcare and Aetna are paying benchmarked against Medicare and State Workers' Comp Fee Schedules</p>
+                    <p class="text-muted">For both Professional and Facility reimbursement. Hospital Outpatient and ASC methodologies.</p>
                     <div class="mt-4">
-                        <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary btn-lg me-3">
+                        <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary btn-lg">
                             <i class="bi bi-graph-up-arrow me-2"></i>View Rate Insights
                         </a>
-                        <!-- Removed the compare button since it requires a state code -->
                     </div>
                 </div>
             </div>
@@ -29,11 +29,11 @@
             <div class="card h-100">
                 <div class="card-body text-center">
                     <div class="mb-3">
-                        <i class="bi bi-graph-up-arrow text-primary" style="font-size: 3rem;"></i>
+                        <i class="bi bi-building text-primary" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Rate Insights</h5>
-                    <p class="card-text">Analyze commercial rate data with interactive filters and visualizations to understand market trends.</p>
-                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-primary">Explore Insights</a>
+                    <h5 class="card-title">Professional Reimbursement</h5>
+                    <p class="card-text">Analyze commercial payer rates for professional services benchmarked against Medicare and state fee schedules.</p>
+                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-primary">Explore Professional Rates</a>
                 </div>
             </div>
         </div>
@@ -42,11 +42,11 @@
             <div class="card h-100">
                 <div class="card-body text-center">
                     <div class="mb-3">
-                        <i class="bi bi-bar-chart text-info" style="font-size: 3rem;"></i>
+                        <i class="bi bi-hospital text-info" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Interactive State Map</h5>
-                    <p class="card-text">Click on any state to view detailed rate insights and comparisons for that specific state.</p>
-                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-info">View Map</a>
+                    <h5 class="card-title">Facility Reimbursement</h5>
+                    <p class="card-text">Compare Hospital Outpatient and ASC methodologies across commercial payers and Medicare benchmarks.</p>
+                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-info">View Facility Rates</a>
                 </div>
             </div>
         </div>
@@ -55,47 +55,47 @@
             <div class="card h-100">
                 <div class="card-body text-center">
                     <div class="mb-3">
-                        <i class="bi bi-shield-check text-success" style="font-size: 3rem;"></i>
+                        <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Secure & Reliable</h5>
-                    <p class="card-text">Your data is protected with enterprise-grade security and reliable infrastructure.</p>
-                    <a href="{% url 'accounts:profile' %}" class="btn btn-outline-success">View Profile</a>
+                    <h5 class="card-title">Competitive Intelligence</h5>
+                    <p class="card-text">Benchmark your rates against UnitedHealthcare, Aetna, and other commercial payers with detailed analytics.</p>
+                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-success">Start Benchmarking</a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Quick Stats -->
+    <!-- Key Metrics -->
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Platform Overview</h5>
+                    <h5 class="mb-0">Coverage Overview</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-3 text-center mb-3">
                             <div class="stats-card">
-                                <h3>100%</h3>
-                                <p>Data Accuracy</p>
+                                <h3>Professional</h3>
+                                <p>Services</p>
                             </div>
                         </div>
                         <div class="col-md-3 text-center mb-3">
                             <div class="stats-card">
-                                <h3>24/7</h3>
-                                <p>Availability</p>
+                                <h3>Hospital</h3>
+                                <p>Outpatient</p>
                             </div>
                         </div>
                         <div class="col-md-3 text-center mb-3">
                             <div class="stats-card">
-                                <h3>Real-time</h3>
-                                <p>Updates</p>
+                                <h3>ASC</h3>
+                                <p>Methodologies</p>
                             </div>
                         </div>
                         <div class="col-md-3 text-center mb-3">
                             <div class="stats-card">
-                                <h3>Enterprise</h3>
-                                <p>Security</p>
+                                <h3>State</h3>
+                                <p>Fee Schedules</p>
                             </div>
                         </div>
                     </div>
