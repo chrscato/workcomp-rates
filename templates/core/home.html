@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Home - WorkComp Rates{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Welcome Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h1 class="display-4 text-primary mb-3">Welcome to WorkComp Rates</h1>
+                    <p class="lead text-muted">Professional workers' compensation rate analysis and insights platform</p>
+                    <div class="mt-4">
+                        <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary btn-lg me-3">
+                            <i class="bi bi-graph-up-arrow me-2"></i>View Rate Insights
+                        </a>
+                        <a href="{% url 'commercial_rate_insights_compare' %}" class="btn btn-outline-primary btn-lg">
+                            <i class="bi bi-bar-chart me-2"></i>Compare Rates
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Grid -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-graph-up-arrow text-primary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title">Rate Insights</h5>
+                    <p class="card-text">Analyze commercial rate data with interactive filters and visualizations to understand market trends.</p>
+                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-primary">Explore Insights</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-bar-chart text-info" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title">Side-by-Side Comparison</h5>
+                    <p class="card-text">Compare rates across multiple organizations and payers to identify competitive advantages.</p>
+                    <a href="{% url 'commercial_rate_insights_compare' %}" class="btn btn-outline-info">Start Comparing</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-shield-check text-success" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title">Secure & Reliable</h5>
+                    <p class="card-text">Your data is protected with enterprise-grade security and reliable infrastructure.</p>
+                    <a href="{% url 'accounts:profile' %}" class="btn btn-outline-success">View Profile</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Platform Overview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="stats-card">
+                                <h3>100%</h3>
+                                <p>Data Accuracy</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="stats-card">
+                                <h3>24/7</h3>
+                                <p>Availability</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="stats-card">
+                                <h3>Real-time</h3>
+                                <p>Updates</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-center mb-3">
+                            <div class="stats-card">
+                                <h3>Enterprise</h3>
+                                <p>Security</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

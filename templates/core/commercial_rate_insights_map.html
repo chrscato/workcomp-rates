@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Commercial Rate Insights - Select State{% endblock %}
+
+{% block extra_head %}
+<style>
+    .map-container {
+        width: 100%;
+        height: 80vh;
+        position: relative;
+        background: #f8f9fa;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .us-map {
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+    }
+    
+    .state {
+        fill: #d1ecf1 !important;
+        stroke: #ffffff !important;
+        stroke-width: 1.5 !important;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .state.available {
+        fill: #28a745 !important;
+        stroke: #1e7e34 !important;
+        stroke-width: 2 !important;
+    }
+    
+    .state.not-ready {
+        fill: #ffc107 !important;
+        stroke: #e0a800 !important;
+        stroke-width: 2 !important;
+    }
+    
+    .state:hover {
+        fill-opacity: 0.8;
+        stroke-width: 2;
+        stroke: #007bff;
+    }
+    
+    .state.available:hover {
+        fill: #218838;
+    }
+    
+    .state.not-ready:hover {
+        fill: #e0a800;
+    }
+    
+    .state-text {
+        font-size: 12px;
+        font-weight: bold;
+        fill: #ffffff;
+        text-anchor: middle;
+        pointer-events: none;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+    }
+    
+    .legend {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        margin-right: 10px;
+        border-radius: 3px;
+    }
+    
+    .legend-color.available {
+        background-color: #28a745;
+    }
+    
+    .legend-color.not-ready {
+        background-color: #ffc107;
+    }
+    
+    .state-info {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 1001;
+        display: none;
+    }
+    
+    .page-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    
+    .page-header h1 {
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    
+    .page-header p {
+        color: #6c757d;
+        font-size: 18px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="page-header">
+        <h1>Commercial Rate Insights</h1>
+        <p>Click on a state to view detailed rate insights and analysis</p>
+    </div>
+    
+    <div class="map-container">
+        <div class="legend">
+            <h6 class="mb-3">State Status</h6>
+            <div class="legend-item">
+                <div class="legend-color available"></div>
+                <span>Available</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color not-ready"></div>
+                <span>Coming Soon</span>
+            </div>
+        </div>
+        
+        <div class="state-info" id="stateInfo"></div>
+        
+        <div id="svg-container"></div>
+        <script>
+            // Load the SVG file dynamically
+            fetch("{% static 'images/us-map.svg' %}")
+                .then(response => response.text())
+                .then(svgContent => {
+                    document.getElementById('svg-container').innerHTML = svgContent;
+                    
+                                         // Apply state status classes after SVG loads
+                     const states = {{ states_data|safe }};
+                     console.log('Available states data:', states);
+                     
+                     Object.keys(states).forEach(stateCode => {
+                         // Try multiple selectors to find state elements
+                         const stateElement = document.querySelector(`[data-state="${stateCode}"]`) || 
+                                            document.querySelector(`[data-id="${stateCode}"]`) ||
+                                            document.getElementById(stateCode);
+                         if (stateElement) {
+                             // Add the 'state' class and status class
+                             stateElement.classList.add('state', states[stateCode]);
+                             console.log(`Applied ${states[stateCode]} class to ${stateCode}`);
+                         } else {
+                             console.log(`Could not find element for state: ${stateCode}`);
+                         }
+                     });
+                     
+                     // Add click handlers after SVG loads
+                     const stateElements = document.querySelectorAll('[id^="AL"], [id^="AK"], [id^="AZ"], [id^="AR"], [id^="CA"], [id^="CO"], [id^="CT"], [id^="DE"], [id^="FL"], [id^="GA"], [id^="HI"], [id^="ID"], [id^="IL"], [id^="IN"], [id^="IA"], [id^="KS"], [id^="KY"], [id^="LA"], [id^="ME"], [id^="MD"], [id^="MA"], [id^="MI"], [id^="MN"], [id^="MS"], [id^="MO"], [id^="MT"], [id^="NE"], [id^="NV"], [id^="NH"], [id^="NJ"], [id^="NM"], [id^="NY"], [id^="NC"], [id^="ND"], [id^="OH"], [id^="OK"], [id^="OR"], [id^="PA"], [id^="RI"], [id^="SC"], [id^="SD"], [id^="TN"], [id^="TX"], [id^="UT"], [id^="VT"], [id^="VA"], [id^="WA"], [id^="WV"], [id^="WI"], [id^="WY"], [id^="DC"]');
+                     console.log('Found state elements:', stateElements.length);
+                     
+                     stateElements.forEach(state => {
+                         const stateCode = state.id;
+                         const status = states[stateCode];
+                         console.log(`State ${stateCode}: ${status}`);
+                        
+                        state.addEventListener('click', function(e) {
+                            if (status === 'available') {
+                                window.location.href = `/commercial/insights/${stateCode}/`;
+                            } else {
+                                alert(`Sorry, ${stateCode} data is not ready yet. Please try another state.`);
+                            }
+                        });
+                        
+                        // Show state info on hover
+                        state.addEventListener('mouseenter', function(e) {
+                            const stateName = getStateName(stateCode);
+                            const statusText = status === 'available' ? 'Available' : 'Coming Soon';
+                            stateInfo.textContent = `${stateName} (${stateCode}) - ${statusText}`;
+                            stateInfo.style.display = 'block';
+                            stateInfo.style.left = e.pageX + 10 + 'px';
+                            stateInfo.style.top = e.pageY - 10 + 'px';
+                        });
+                        
+                        state.addEventListener('mouseleave', function() {
+                            stateInfo.style.display = 'none';
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading SVG:', error);
+                    document.getElementById('svg-container').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;"><p>Error loading map</p></div>';
+                });
+        </script>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const stateInfo = document.getElementById('stateInfo');
+    
+    function getStateName(stateCode) {
+        const stateNames = {
+            "MA": "Massachusetts",
+            "MN": "Minnesota",
+            "MT": "Montana",
+            "ND": "North Dakota",
+            "HI": "Hawaii",
+            "ID": "Idaho",
+            "WA": "Washington",
+            "AZ": "Arizona",
+            "CA": "California",
+            "CO": "Colorado",
+            "NV": "Nevada",
+            "NM": "New Mexico",
+            "OR": "Oregon",
+            "UT": "Utah",
+            "WY": "Wyoming",
+            "AR": "Arkansas",
+            "IA": "Iowa",
+            "KS": "Kansas",
+            "MO": "Missouri",
+            "NE": "Nebraska",
+            "OK": "Oklahoma",
+            "SD": "South Dakota",
+            "LA": "Louisiana",
+            "TX": "Texas",
+            "CT": "Connecticut",
+            "NH": "New Hampshire",
+            "RI": "Rhode Island",
+            "VT": "Vermont",
+            "AL": "Alabama",
+            "FL": "Florida",
+            "GA": "Georgia",
+            "MS": "Mississippi",
+            "SC": "South Carolina",
+            "IL": "Illinois",
+            "IN": "Indiana",
+            "KY": "Kentucky",
+            "NC": "North Carolina",
+            "OH": "Ohio",
+            "TN": "Tennessee",
+            "VA": "Virginia",
+            "WI": "Wisconsin",
+            "WV": "West Virginia",
+            "DE": "Delaware",
+            "DC": "District of Columbia",
+            "MD": "Maryland",
+            "NJ": "New Jersey",
+            "NY": "New York",
+            "PA": "Pennsylvania",
+            "ME": "Maine",
+            "MI": "Michigan",
+            "AK": "Alaska"
+        };
+        return stateNames[stateCode] || stateCode;
+    }
+    
+    // Make getStateName available globally for the SVG loading script
+    window.getStateName = getStateName;
+});
+</script>
+{% endblock %}

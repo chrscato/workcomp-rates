@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ state_name }} Commercial Rate Insights - WorkComp Rates{% endblock %}
+
+{% block extra_head %}
+<!-- Select2 for enhanced dropdowns -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<!-- Plotly for data visualization -->
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    {% if has_data %}
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">{{ state_name }} Commercial Rate Insights</h4>
+                            <p class="text-muted mb-0">State Code: {{ state_code }}</p>
+                        </div>
+                        <div>
+                            <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-secondary me-2">
+                                <i class="fas fa-map"></i> Back to Map
+                            </a>
+                            <a href="{% url 'commercial_rate_insights_compare' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-columns"></i> Compare Organizations/Payers
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" class="row g-3" id="filterForm">
+                            <!-- Payer Filter -->
+                            <div class="col-md-3">
+                                <label for="payer" class="form-label">Payer</label>
+                                <select class="form-select filter-select select2-dropdown" id="payer" name="payer" data-filter="payer">
+                                    <option value="">All Payers</option>
+                                    {% for payer in filters.payers %}
+                                        <option value="{{ payer }}" {% if payer == active_filters.payer %}selected{% endif %}>{{ payer }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Organization Filter -->
+                            <div class="col-md-3">
+                                <label for="org_name" class="form-label">Organization</label>
+                                <select class="form-select filter-select select2-dropdown" id="org_name" name="org_name" data-filter="org_name">
+                                    <option value="">All Organizations</option>
+                                    {% for org in filters.organizations %}
+                                        <option value="{{ org }}" {% if org == active_filters.org_name %}selected{% endif %}>{{ org }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Procedure Set Filter -->
+                            <div class="col-md-3">
+                                <label for="procedure_set" class="form-label">Procedure Set</label>
+                                <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set" data-filter="procedure_set">
+                                    <option value="">All Sets</option>
+                                    {% for set in filters.procedure_sets %}
+                                        <option value="{{ set }}" {% if set == active_filters.procedure_set %}selected{% endif %}>{{ set }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Procedure Class Filter -->
+                            <div class="col-md-3">
+                                <label for="procedure_class" class="form-label">Procedure Class</label>
+                                <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class">
+                                    <option value="">All Classes</option>
+                                    {% for class in filters.procedure_classes %}
+                                        <option value="{{ class }}" {% if class == active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Procedure Group Filter -->
+                            <div class="col-md-4">
+                                <label for="procedure_group" class="form-label">Procedure Group</label>
+                                <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group">
+                                    <option value="">All Groups</option>
+                                    {% for group in filters.procedure_groups %}
+                                        <option value="{{ group }}" {% if group == active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- CBSA Filter -->
+                            <div class="col-md-3">
+                                <label for="cbsa" class="form-label">CBSA Region</label>
+                                <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa">
+                                    <option value="">All Regions</option>
+                                    {% for region in filters.cbsa_regions %}
+                                        <option value="{{ region }}" {% if region == active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Billing Code Filter -->
+                            <div class="col-md-3">
+                                <label for="billing_code" class="form-label">Billing Code</label>
+                                <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code">
+                                    <option value="">All Codes</option>
+                                    {% for code in filters.billing_codes %}
+                                        <option value="{{ code }}" {% if code == active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                                <a href="{% url 'commercial_rate_insights_state' state_code %}" class="btn btn-outline-secondary">Reset</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <!-- Professional Rates -->
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Professional Rates</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="stats-card">
+                                    <h3>${{ stats.professional.avg_rate|floatformat:0|intcomma }}</h3>
+                                    <p>Average Rate</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stats-card">
+                                    <h3>{{ stats.professional.record_count|intcomma }}</h3>
+                                    <p>Records</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <p class="mb-1"><strong>GA Professional Margin:</strong></p>
+                                <p class="text-muted">${{ stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
+                                <p class="text-muted">{{ stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                            </div>
+                            <div class="col-6">
+                                <p class="mb-1"><strong>Medicare Professional:</strong></p>
+                                <p class="text-muted">${{ stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
+                                <p class="text-muted">{{ stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Facility Rates -->
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Facility Rates</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="stats-card">
+                                    <h3>${{ stats.facility.avg_rate|floatformat:0|intcomma }}</h3>
+                                    <p>Average Rate</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stats-card">
+                                    <h3>{{ stats.facility.record_count|intcomma }}</h3>
+                                    <p>Records</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
+                                <p class="text-muted">${{ stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
+                            </div>
+                            <div class="col-6">
+                                <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
+                                <p class="text-muted">${{ stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-6">
+                                <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
+                                <p class="text-muted">${{ stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
+                            </div>
+                            <div class="col-6">
+                                <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
+                                <p class="text-muted">${{ stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sample Records Table -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Sample Records</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Billing Code</th>
+                                        <th>Description</th>
+                                        <th>Organization</th>
+                                        <th>Payer</th>
+                                        <th>Taxonomy</th>
+                                        <th class="text-end">Rate</th>
+                                        <th class="text-end">GA Prof</th>
+                                        <th class="text-end">Medicare Prof</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for record in sample_records %}
+                                    <tr>
+                                        <td>{{ record.billing_code }}</td>
+                                        <td>{{ record.code_desc }}</td>
+                                        <td>{{ record.org_name }}</td>
+                                        <td>{{ record.payer }}</td>
+                                        <td>{{ record.primary_taxonomy_desc }}</td>
+                                        <td class="text-end">${{ record.rate|floatformat:2|intcomma }}</td>
+                                        <td class="text-end">${{ record.ga_prof_mar|floatformat:2|intcomma|default:"-" }}</td>
+                                        <td class="text-end">${{ record.medicare_prof_mar|floatformat:2|intcomma|default:"-" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 class="text-warning mb-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            {{ error_message }}
+                        </h3>
+                        <p class="text-muted mb-4">
+                            The data for {{ state_name }} ({{ state_code }}) is not currently available.
+                        </p>
+                        <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-primary">
+                            <i class="fas fa-map"></i> Back to State Map
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% if has_data %}
+    {% block extra_js %}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <style>
+        .filter-loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .filter-error {
+            border-color: red;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Select2 for all filter dropdowns
+            $('.select2-dropdown').select2({
+                placeholder: 'Type to search...',
+                allowClear: true,
+                width: '100%',
+                minimumInputLength: 0,
+                templateResult: function(data) {
+                    if (data.loading) return data.text;
+                    if (!data.id) return data.text;
+                    return $('<span>' + data.text + '</span>');
+                },
+                templateSelection: function(data) {
+                    if (!data.id) return data.text;
+                    return data.text;
+                }
+            });
+            
+            // Filter Logic
+            const filterForm = document.getElementById('filterForm');
+            const filterSelects = document.querySelectorAll('.filter-select');
+            
+            // Function to submit form
+            function submitForm() {
+                const formData = new FormData(filterForm);
+                const params = new URLSearchParams(formData);
+                window.location.href = `${window.location.pathname}?${params.toString()}`;
+            }
+
+            // Add change event listeners to all filters
+            filterSelects.forEach(select => {
+                select.addEventListener('change', () => {
+                    submitForm();  // Submit form immediately on any filter change
+                });
+            });
+
+            // Handle Select2 change events
+            $('.select2-dropdown').on('select2:select select2:unselect', function() {
+                submitForm();
+            });
+        });
+    </script>
+    {% endblock %}
+{% endif %}
+{% endblock %}
