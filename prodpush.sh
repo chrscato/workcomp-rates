@@ -109,6 +109,12 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     git fetch origin
     git reset --hard origin/master
     
+    # Check if virtual environment exists, if not create it
+    if [ ! -d ".venv" ]; then
+        print_status "Virtual environment not found. Creating new one..."
+        uv venv .venv
+    fi
+    
     # Install/update dependencies
     print_status "Updating dependencies..."
     source .venv/bin/activate
