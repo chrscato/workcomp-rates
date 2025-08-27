@@ -11,6 +11,7 @@ SERVER_IP="134.209.13.85"
 SERVER_USER="root"
 SERVER_PATH="/var/www/workcomp-rates"
 BRANCH="master"
+TMUX_SESSION="workcomp-rates"
 
 # Colors for output
 RED='\033[0;31m'
@@ -90,6 +91,15 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     
     cd /var/www/workcomp-rates
     
+    # Check if git repository exists, if not clone it
+    if [ ! -d ".git" ]; then
+        print_status "Git repository not found. Cloning from GitHub..."
+        cd /var/www
+        rm -rf workcomp-rates
+        git clone https://github.com/chrscato/workcomp-rates.git
+        cd workcomp-rates
+    fi
+    
     # Backup current state
     print_status "Creating backup..."
     cp -r . ../workcomp-rates-backup-$(date +%Y%m%d-%H%M%S) 2>/dev/null || true
@@ -112,15 +122,18 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     print_status "Collecting static files..."
     python manage.py collectstatic --noinput
     
-    # Restart Django (if using systemd)
-    print_status "Restarting Django application..."
-    if systemctl is-active --quiet workcomp-rates; then
-        systemctl restart workcomp-rates
-        print_success "Django service restarted"
-    else
-        print_warning "Django service not running via systemd"
-        print_status "You may need to restart Django manually"
-    fi
+    # Restart Django in tmux session
+    print_status "Restarting Django application in tmux..."
+    
+    # Kill existing tmux session if it exists
+    tmux kill-session -t workcomp-rates 2>/dev/null || true
+    
+    # Create new tmux session and start Django
+    tmux new-session -d -s workcomp-rates -c /var/www/workcomp-rates
+    tmux send-keys -t workcomp-rates "source .venv/bin/activate" Enter
+    tmux send-keys -t workcomp-rates "python manage.py runserver 0.0.0.0:8000" Enter
+    
+    print_success "Django restarted in tmux session 'workcomp-rates'"
     
     # Reload Caddy
     print_status "Reloading Caddy..."
@@ -128,11 +141,13 @@ ssh $SERVER_USER@$SERVER_IP << 'EOF'
     
     # Health check
     print_status "Performing health check..."
-    sleep 3
+    sleep 5
     if curl -f -s https://workcomp-rates.com > /dev/null; then
         print_success "Health check passed - site is responding"
     else
         print_error "Health check failed - site may not be responding"
+        print_status "Checking tmux session status..."
+        tmux list-sessions
         exit 1
     fi
     
