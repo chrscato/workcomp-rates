@@ -73,7 +73,10 @@ def commercial_rate_insights_state(request, state_code):
             'procedure_class': request.GET.get('procedure_class'),
             'procedure_group': request.GET.get('procedure_group'),
             'cbsa': request.GET.get('cbsa'),
-            'billing_code': request.GET.get('billing_code')
+            'billing_code': request.GET.get('billing_code'),
+            'tin_value': request.GET.get('tin_value'),
+            'primary_taxonomy_code': request.GET.get('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.get('primary_taxonomy_desc')
         }
         
         # Remove empty filters
@@ -90,6 +93,9 @@ def commercial_rate_insights_state(request, state_code):
             'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
             'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
             'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
+            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
+            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
         }
         
         # Get aggregated statistics with filters
@@ -129,9 +135,65 @@ def commercial_rate_insights_state(request, state_code):
 @login_required
 def commercial_rate_insights(request):
     """
-    Commercial Rate Insights Dashboard (Legacy - redirects to map)
+    Commercial Rate Insights Dashboard with sample data for demonstration
     """
-    return commercial_rate_insights_map(request)
+    try:
+        # Initialize data manager with sample data
+        data_manager = ParquetDataManager()
+        
+        # Get active filters from request
+        active_filters = {
+            'payer': request.GET.get('payer'),
+            'org_name': request.GET.get('org_name'),
+            'procedure_set': request.GET.get('procedure_set'),
+            'procedure_class': request.GET.get('procedure_class'),
+            'procedure_group': request.GET.get('procedure_group'),
+            'cbsa': request.GET.get('cbsa'),
+            'billing_code': request.GET.get('billing_code'),
+            'tin_value': request.GET.get('tin_value'),
+            'primary_taxonomy_code': request.GET.get('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.get('primary_taxonomy_desc')
+        }
+        
+        # Remove empty filters
+        active_filters = {k: v for k, v in active_filters.items() if v}
+        
+        # Get filtered options for each field based on current selections
+        filters = {
+            'payers': data_manager.get_unique_values('payer', active_filters),
+            'organizations': data_manager.get_unique_values('org_name', active_filters),
+            'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
+            'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
+            'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
+            'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
+            'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
+            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
+            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
+        }
+        
+        # Get aggregated statistics with filters
+        stats = data_manager.get_aggregated_stats(active_filters)
+        
+        # Get sample records
+        sample_records = data_manager.get_sample_records(active_filters, limit=10)
+        
+        context = {
+            'filters': filters,
+            'stats': stats,
+            'active_filters': active_filters,
+            'sample_records': sample_records,
+            'has_data': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in commercial_rate_insights view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while processing the data.'
+        }
+    
+    return render(request, 'core/commercial_rate_insights.html', context)
 
 
 @login_required
@@ -165,7 +227,10 @@ def commercial_rate_insights_compare(request, state_code):
             'procedure_class': request.GET.get('procedure_class'),
             'procedure_group': request.GET.get('procedure_group'),
             'cbsa': request.GET.get('cbsa'),
-            'billing_code': request.GET.get('billing_code')
+            'billing_code': request.GET.get('billing_code'),
+            'tin_value': request.GET.get('tin_value'),
+            'primary_taxonomy_code': request.GET.get('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.get('primary_taxonomy_desc')
         }
         
         # Remove empty filters
@@ -213,6 +278,9 @@ def commercial_rate_insights_compare(request, state_code):
             'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
             'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
             'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
+            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
+            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
         }
         
         # Get base state statistics (without comparison filters)

@@ -32,88 +32,202 @@
                             </a>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <form method="get" class="row g-3" id="filterForm">
-                            <!-- Payer Filter -->
-                            <div class="col-md-3">
-                                <label for="payer" class="form-label">Payer</label>
-                                <select class="form-select filter-select select2-dropdown" id="payer" name="payer" data-filter="payer">
-                                    <option value="">All Payers</option>
-                                    {% for payer in filters.payers %}
-                                        <option value="{{ payer }}" {% if payer == active_filters.payer %}selected{% endif %}>{{ payer }}</option>
-                                    {% endfor %}
-                                </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Filters Summary -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="active-filters-summary" id="activeFiltersSummary" style="display: none;">
+                    <div class="alert alert-info d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="fas fa-filter"></i>
+                            <strong>Active Filters:</strong>
+                            <span id="activeFiltersText">No filters applied</span>
+                        </div>
+                            <button type="button" class="btn btn-sm btn-outline-info" onclick="clearAllFilters()">
+                                <i class="fas fa-times"></i> Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Card -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="toggleFilters()">
+                        <div class="d-flex align-items-center">
+                            <h5 class="card-title mb-0 me-2">
+                                <i class="fas fa-filter"></i> Filters
+                            </h5>
+                            <small class="text-muted">(Click here to expand/collapse view)</small>
+                        </div>
+                        <i class="fas fa-chevron-right" id="filterToggleIcon"></i>
+                    </div>
+                    <div class="card-body" id="filterCardBody" style="display: none;">
+                        <form method="get" id="filterForm">
+                            <!-- Tier 1: High-Level Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-globe text-primary"></i>
+                                    High-Level Filters
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label for="payer" class="form-label fw-bold">
+                                            <i class="fas fa-building text-info"></i> Payer
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="payer" name="payer" data-filter="payer">
+                                            <option value="">All Payers</option>
+                                            {% for payer in filters.payers %}
+                                                <option value="{{ payer }}" {% if payer == active_filters.payer %}selected{% endif %}>{{ payer }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="org_name" class="form-label fw-bold">
+                                            <i class="fas fa-hospital text-success"></i> Organization
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="org_name" name="org_name" data-filter="org_name">
+                                            <option value="">All Organizations</option>
+                                            {% for org in filters.organizations %}
+                                                <option value="{{ org }}" {% if org == active_filters.org_name %}selected{% endif %}>{{ org }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <!-- Organization Filter -->
-                            <div class="col-md-3">
-                                <label for="org_name" class="form-label">Organization</label>
-                                <select class="form-select filter-select select2-dropdown" id="org_name" name="org_name" data-filter="org_name">
-                                    <option value="">All Organizations</option>
-                                    {% for org in filters.organizations %}
-                                        <option value="{{ org }}" {% if org == active_filters.org_name %}selected{% endif %}>{{ org }}</option>
-                                    {% endfor %}
-                                </select>
+
+                            <!-- Tier 2: Geographic & Regional Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-map-marker-alt text-warning"></i>
+                                    Geographic & Regional
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label for="cbsa" class="form-label fw-bold">
+                                            <i class="fas fa-map text-warning"></i> CBSA Region
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa">
+                                            <option value="">All Regions</option>
+                                            {% for region in filters.cbsa_regions %}
+                                                <option value="{{ region }}" {% if region == active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="tin_value" class="form-label fw-bold">
+                                            <i class="fas fa-id-card text-secondary"></i> TIN #
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="tin_value" name="tin_value" data-filter="tin_value">
+                                            <option value="">All TINs</option>
+                                            {% for tin in filters.tin_values %}
+                                                <option value="{{ tin }}" {% if tin == active_filters.tin_value %}selected{% endif %}>{{ tin }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <!-- Procedure Set Filter -->
-                            <div class="col-md-3">
-                                <label for="procedure_set" class="form-label">Procedure Set</label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set" data-filter="procedure_set">
-                                    <option value="">All Sets</option>
-                                    {% for set in filters.procedure_sets %}
-                                        <option value="{{ set }}" {% if set == active_filters.procedure_set %}selected{% endif %}>{{ set }}</option>
-                                    {% endfor %}
-                                </select>
+
+                            <!-- Tier 3: Procedure & Service Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-stethoscope text-danger"></i>
+                                    Procedure & Service Classification
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="procedure_set" class="form-label fw-bold">
+                                            <i class="fas fa-layer-group text-danger"></i> Procedure Set
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set" data-filter="procedure_set">
+                                            <option value="">All Sets</option>
+                                            {% for set in filters.procedure_sets %}
+                                                <option value="{{ set }}" {% if set == active_filters.procedure_set %}selected{% endif %}>{{ set }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="procedure_class" class="form-label fw-bold">
+                                            <i class="fas fa-tags text-danger"></i> Procedure Class
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class">
+                                            <option value="">All Classes</option>
+                                            {% for class in filters.procedure_classes %}
+                                                <option value="{{ class }}" {% if class == active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="procedure_group" class="form-label fw-bold">
+                                            <i class="fas fa-object-group text-danger"></i> Procedure Group
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group">
+                                            <option value="">All Groups</option>
+                                            {% for group in filters.procedure_groups %}
+                                                <option value="{{ group }}" {% if group == active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <!-- Procedure Class Filter -->
-                            <div class="col-md-3">
-                                <label for="procedure_class" class="form-label">Procedure Class</label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class">
-                                    <option value="">All Classes</option>
-                                    {% for class in filters.procedure_classes %}
-                                        <option value="{{ class }}" {% if class == active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
-                                    {% endfor %}
-                                </select>
+
+                            <!-- Tier 4: Detailed Service & Provider Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-microscope text-info"></i>
+                                    Detailed Service & Provider
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="billing_code" class="form-label fw-bold">
+                                            <i class="fas fa-barcode text-info"></i> Billing Code
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code">
+                                            <option value="">All Codes</option>
+                                            {% for code in filters.billing_codes %}
+                                                <option value="{{ code }}" {% if code == active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="primary_taxonomy_code" class="form-label fw-bold">
+                                            <i class="fas fa-user-md text-info"></i> Taxonomy Code
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_code" name="primary_taxonomy_code" data-filter="primary_taxonomy_code">
+                                            <option value="">All Codes</option>
+                                            {% for code in filters.primary_taxonomy_codes %}
+                                                <option value="{{ code }}" {% if code == active_filters.primary_taxonomy_code %}selected{% endif %}>{{ code }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="primary_taxonomy_desc" class="form-label fw-bold">
+                                            <i class="fas fa-user-nurse text-info"></i> Taxonomy Description
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" data-filter="primary_taxonomy_desc">
+                                            <option value="">All Descriptions</option>
+                                            {% for desc in filters.primary_taxonomy_descs %}
+                                                <option value="{{ desc }}" {% if desc == active_filters.primary_taxonomy_desc %}selected{% endif %}>{{ desc }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <!-- Procedure Group Filter -->
-                            <div class="col-md-4">
-                                <label for="procedure_group" class="form-label">Procedure Group</label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group">
-                                    <option value="">All Groups</option>
-                                    {% for group in filters.procedure_groups %}
-                                        <option value="{{ group }}" {% if group == active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            
-                            <!-- CBSA Filter -->
-                            <div class="col-md-3">
-                                <label for="cbsa" class="form-label">CBSA Region</label>
-                                <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa">
-                                    <option value="">All Regions</option>
-                                    {% for region in filters.cbsa_regions %}
-                                        <option value="{{ region }}" {% if region == active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            
-                            <!-- Billing Code Filter -->
-                            <div class="col-md-3">
-                                <label for="billing_code" class="form-label">Billing Code</label>
-                                <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code">
-                                    <option value="">All Codes</option>
-                                    {% for code in filters.billing_codes %}
-                                        <option value="{{ code }}" {% if code == active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            
-                            <div class="col-12">
-                                <button type="submit" class="btn btn-primary">Apply Filters</button>
-                                <a href="{% url 'commercial_rate_insights_compare' state_code %}" class="btn btn-outline-secondary">Reset</a>
+
+                            <!-- Action Buttons -->
+                            <div class="filter-actions">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-filter"></i> Apply Filters
+                                </button>
+                                <a href="{% url 'commercial_rate_insights_compare' state_code %}" class="btn btn-outline-secondary btn-lg">
+                                    <i class="fas fa-undo"></i> Reset All
+                                </a>
                             </div>
                         </form>
                     </div>
@@ -146,14 +260,14 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-6">
-                                        <p class="mb-1"><strong>GA Prof:</strong></p>
-                                        <p class="text-muted">${{ base_stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
-                                        <p class="text-muted small">{{ base_stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                        <p class="mb-1"><strong>GA WCFS PROF:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                        <p class="text-muted small">${{ base_stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
                                     </div>
                                     <div class="col-6">
                                         <p class="mb-1"><strong>Medicare:</strong></p>
-                                        <p class="text-muted">${{ base_stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
-                                        <p class="text-muted small">{{ base_stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                        <p class="text-muted h5">{{ base_stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                        <p class="text-muted small">${{ base_stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
                                     </div>
                                 </div>
                             </div>
@@ -174,21 +288,25 @@
                                 <div class="row">
                                     <div class="col-6">
                                         <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
-                                        <p class="text-muted">${{ base_stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
+                                        <p class="text-muted h5">{{ base_stats.facility.ga_op_pct|floatformat:1 }}% of GA OP</p>
+                                        <p class="text-muted small">${{ base_stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
                                     </div>
                                     <div class="col-6">
                                         <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
-                                        <p class="text-muted">${{ base_stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
+                                        <p class="text-muted h5">{{ base_stats.facility.ga_asc_pct|floatformat:1 }}% of GA ASC</p>
+                                        <p class="text-muted small">${{ base_stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-6">
                                         <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
-                                        <p class="text-muted">${{ base_stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
+                                        <p class="text-muted h5">{{ base_stats.facility.medicare_op_pct|floatformat:1 }}% of Medicare OP</p>
+                                        <p class="text-muted small">${{ base_stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
                                     </div>
                                     <div class="col-6">
                                         <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
-                                        <p class="text-muted">${{ base_stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
+                                        <p class="text-muted h5">{{ base_stats.facility.medicare_asc_pct|floatformat:1 }}% of Medicare ASC</p>
+                                        <p class="text-muted small">${{ base_stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
                                     </div>
                                 </div>
                             </div>
@@ -216,6 +334,9 @@
                             <input type="hidden" name="procedure_group" value="{{ active_filters.procedure_group|default:'' }}">
                             <input type="hidden" name="cbsa" value="{{ active_filters.cbsa|default:'' }}">
                             <input type="hidden" name="billing_code" value="{{ active_filters.billing_code|default:'' }}">
+                            <input type="hidden" name="tin_value" value="{{ active_filters.tin_value|default:'' }}">
+                            <input type="hidden" name="primary_taxonomy_code" value="{{ active_filters.primary_taxonomy_code|default:'' }}">
+                            <input type="hidden" name="primary_taxonomy_desc" value="{{ active_filters.primary_taxonomy_desc|default:'' }}">
                             
                             <!-- Organization Selection -->
                             <div class="row mb-3">
@@ -312,14 +433,14 @@
                                     </div>
                                     <div class="row">
                                         <div class="col-6">
-                                            <p class="mb-1"><strong>GA Prof:</strong></p>
-                                            <p class="text-muted">${{ entity.stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
-                                            <p class="text-muted small">{{ entity.stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                            <p class="mb-1"><strong>GA WCFS PROF:</strong></p>
+                                            <p class="text-muted h5">{{ entity.stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                            <p class="text-muted small">${{ entity.stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
                                         </div>
                                         <div class="col-6">
                                             <p class="mb-1"><strong>Medicare:</strong></p>
-                                            <p class="text-muted">${{ entity.stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
-                                            <p class="text-muted small">{{ entity.stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                            <p class="text-muted h5">{{ entity.stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                            <p class="text-muted small">${{ entity.stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -340,21 +461,25 @@
                                     <div class="row">
                                         <div class="col-6">
                                             <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
-                                            <p class="text-muted">${{ entity.stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
+                                            <p class="text-muted h5">{{ entity.stats.facility.ga_op_pct|floatformat:1 }}% of GA OP</p>
+                                            <p class="text-muted small">${{ entity.stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
                                         </div>
                                         <div class="col-6">
                                             <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
-                                            <p class="text-muted">${{ entity.stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
+                                            <p class="text-muted h5">{{ entity.stats.facility.ga_asc_pct|floatformat:1 }}% of GA ASC</p>
+                                            <p class="text-muted small">${{ entity.stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
                                         </div>
                                     </div>
                                     <div class="row">
                                         <div class="col-6">
                                             <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
-                                            <p class="text-muted">${{ entity.stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
+                                            <p class="text-muted h5">{{ entity.stats.facility.medicare_op_pct|floatformat:1 }}% of Medicare OP</p>
+                                            <p class="text-muted small">${{ entity.stats.facility.medicare_op_mar_stateavg|floatformat:2|intcomma }}</p>
                                         </div>
                                         <div class="col-6">
                                             <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
-                                            <p class="text-muted">${{ entity.stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
+                                            <p class="text-muted h5">{{ entity.stats.facility.medicare_asc_pct|floatformat:1 }}% of Medicare ASC</p>
+                                            <p class="text-muted small">${{ entity.stats.facility.medicare_asc_mar_stateavg|floatformat:2|intcomma }}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -368,6 +493,8 @@
                                             <thead>
                                                 <tr>
                                                     <th>Code</th>
+                                                    <th>TIN #</th>
+                                                    <th>Taxonomy</th>
                                                     <th>Rate</th>
                                                     <th>GA Prof</th>
                                                 </tr>
@@ -376,6 +503,8 @@
                                                 {% for record in entity.sample_records %}
                                                 <tr>
                                                     <td>{{ record.billing_code }}</td>
+                                                    <td>{{ record.tin_value }}</td>
+                                                    <td>{{ record.primary_taxonomy_code }}</td>
                                                     <td>${{ record.rate|floatformat:2|intcomma }}</td>
                                                     <td>${{ record.ga_prof_mar|floatformat:2|intcomma|default:"-" }}</td>
                                                 </tr>
@@ -472,6 +601,170 @@
             padding: 0.25rem;
             font-size: 0.875rem;
         }
+        
+        /* Analytics Dashboard Filter Styles */
+        .filter-tier {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            padding: 0.75rem;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            margin-bottom: 0.5rem;
+        }
+        
+        .filter-tier:hover {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        
+        .filter-tier-title {
+            color: #495057;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.25rem;
+            border-bottom: 1px solid #007bff;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.85rem;
+        }
+        
+        .filter-tier-title i {
+            font-size: 0.9rem;
+        }
+        
+        .form-label {
+            color: #495057;
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+        
+        .form-label i {
+            margin-right: 0.25rem;
+            width: 12px;
+            font-size: 0.75rem;
+        }
+        
+        .form-select {
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            height: 32px;
+        }
+        
+        .form-select:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.1rem rgba(0,123,255,0.25);
+        }
+        
+        .filter-actions {
+            text-align: center;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+        }
+        
+        .filter-actions .btn {
+            margin: 0 0.25rem;
+            border-radius: 6px;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+        }
+        
+        .filter-actions .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        .filter-actions .btn i {
+            margin-right: 0.25rem;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .filter-tier {
+                padding: 1rem;
+            }
+            
+            .filter-actions .btn {
+                display: block;
+                width: 100%;
+                margin: 0.5rem 0;
+            }
+        }
+        
+        /* Select2 customization */
+        .select2-container--default .select2-selection--single {
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            height: 32px;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 30px;
+            padding-left: 8px;
+            font-size: 0.8rem;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 30px;
+        }
+        
+        .select2-dropdown {
+            border-radius: 6px;
+            border: 1px solid #007bff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        
+        /* Collapsible filter styles */
+        .card-header[onclick] {
+            transition: background-color 0.3s ease;
+            padding: 0.75rem 1rem;
+        }
+        
+        .card-header[onclick]:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .card-header[onclick] .text-muted {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        #filterToggleIcon {
+            transition: transform 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        #filterCardBody {
+            transition: all 0.3s ease;
+            padding: 1rem;
+        }
+        
+        /* Compact filter card when collapsed */
+        .card-header[onclick] + .card-body[style*="display: none"] {
+            padding: 0;
+            margin: 0;
+        }
+        
+        /* Active filters summary styles */
+        .active-filters-summary .alert {
+            border-radius: 8px;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .active-filters-summary .btn {
+            border-radius: 6px;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -563,7 +856,79 @@
                     cb.disabled = false;
                 });
             };
+
+            // Initialize active filters display
+            updateActiveFiltersDisplay();
+            
+            // Only collapse filters on first load (no active filters)
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasActiveFilters = Array.from(urlParams.values()).some(value => value && value !== '');
+            
+            if (!hasActiveFilters) {
+                // First load - keep collapsed
+                document.getElementById('filterCardBody').style.display = 'none';
+                document.getElementById('filterToggleIcon').className = 'fas fa-chevron-right';
+            } else {
+                // User has applied filters - expand and show
+                document.getElementById('filterCardBody').style.display = 'block';
+                document.getElementById('filterToggleIcon').className = 'fas fa-chevron-down';
+            }
         });
+
+        // Global functions for collapsible filters and active filters
+        function toggleFilters() {
+            const filterCardBody = document.getElementById('filterCardBody');
+            const filterToggleIcon = document.getElementById('filterToggleIcon');
+            
+            if (filterCardBody.style.display === 'none') {
+                filterCardBody.style.display = 'block';
+                filterToggleIcon.className = 'fas fa-chevron-down';
+            } else {
+                filterCardBody.style.display = 'none';
+                filterToggleIcon.className = 'fas fa-chevron-right';
+            }
+        }
+
+        function updateActiveFiltersDisplay() {
+            const activeFiltersSummary = document.getElementById('activeFiltersSummary');
+            const activeFiltersText = document.getElementById('activeFiltersText');
+            const filterSelects = document.querySelectorAll('.filter-select');
+            
+            const activeFilters = [];
+            
+            filterSelects.forEach(select => {
+                if (select.value && select.value !== '') {
+                    const filterName = select.getAttribute('data-filter') || select.name;
+                    const filterValue = select.value;
+                    activeFilters.push(`${filterName}: ${filterValue}`);
+                }
+            });
+            
+            if (activeFilters.length > 0) {
+                activeFiltersText.textContent = activeFilters.join(', ');
+                activeFiltersSummary.style.display = 'block';
+            } else {
+                activeFiltersText.textContent = 'No filters applied';
+                activeFiltersSummary.style.display = 'none';
+            }
+        }
+
+        function clearAllFilters() {
+            const filterSelects = document.querySelectorAll('.filter-select');
+            
+            filterSelects.forEach(select => {
+                select.value = '';
+                if ($(select).hasClass('select2-hidden-accessible')) {
+                    $(select).val('').trigger('change');
+                }
+            });
+            
+            // Submit the form to clear filters
+            const filterForm = document.getElementById('filterForm');
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams(formData);
+            window.location.href = `${window.location.pathname}?${params.toString()}`;
+        }
     </script>
     {% endblock %}
 {% endif %}

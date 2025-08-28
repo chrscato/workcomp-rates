@@ -105,6 +105,8 @@ class ParquetDataManager:
             'rate': np.random.uniform(50, 500, n_records),
             'code_desc': np.random.choice(['Office visit', 'Surgery', 'Consultation', 'Diagnostic test'], n_records),
             'primary_taxonomy_desc': np.random.choice(['Cardiology', 'Orthopedics', 'Neurology', 'General Practice'], n_records),
+            'primary_taxonomy_code': np.random.choice(['207RC0000X', '207T00000X', '208D00000X', '207Q00000X'], n_records),
+            'tin_value': np.random.choice(['123456789', '987654321', '456789123', '789123456'], n_records),
             'GA_PROF_MAR': np.random.uniform(40, 400, n_records),
             'medicare_prof': np.random.uniform(30, 300, n_records),
             'GA_OP_MAR': np.random.uniform(200, 2000, n_records),
@@ -269,6 +271,24 @@ class ParquetDataManager:
             avg_medicare_opps_mar = sum(medicare_opps_mar) / len(medicare_opps_mar) if medicare_opps_mar else 0
             avg_medicare_asc_mar = sum(medicare_asc_mar) / len(medicare_asc_mar) if medicare_asc_mar else 0
             
+            # Calculate facility percentages
+            facility_ga_op_pct = 0
+            facility_ga_asc_pct = 0
+            facility_medicare_op_pct = 0
+            facility_medicare_asc_pct = 0
+            
+            if facility_rates and ga_op_mar:
+                facility_ga_op_pct = (avg_facility_rate / avg_ga_op_mar) * 100 if avg_ga_op_mar > 0 else 0
+            
+            if facility_rates and ga_asc_mar:
+                facility_ga_asc_pct = (avg_facility_rate / avg_ga_asc_mar) * 100 if avg_ga_asc_mar > 0 else 0
+            
+            if facility_rates and medicare_opps_mar:
+                facility_medicare_op_pct = (avg_facility_rate / avg_medicare_opps_mar) * 100 if avg_medicare_opps_mar > 0 else 0
+            
+            if facility_rates and medicare_asc_mar:
+                facility_medicare_asc_pct = (avg_facility_rate / avg_medicare_asc_mar) * 100 if avg_medicare_asc_mar > 0 else 0
+            
             return {
                 'professional': {
                     'avg_rate': round(avg_prof_rate, 2),
@@ -281,9 +301,13 @@ class ParquetDataManager:
                 'facility': {
                     'avg_rate': round(avg_facility_rate, 2),
                     'ga_op_mar': round(avg_ga_op_mar, 2),
+                    'ga_op_pct': round(facility_ga_op_pct, 2),
                     'ga_asc_mar': round(avg_ga_asc_mar, 2),
+                    'ga_asc_pct': round(facility_ga_asc_pct, 2),
                     'medicare_op_mar_stateavg': round(avg_medicare_opps_mar, 2),
+                    'medicare_op_pct': round(facility_medicare_op_pct, 2),
                     'medicare_asc_mar_stateavg': round(avg_medicare_asc_mar, 2),
+                    'medicare_asc_pct': round(facility_medicare_asc_pct, 2),
                     'record_count': len(facility_data),
                 }
             }
@@ -292,7 +316,7 @@ class ParquetDataManager:
             logger.error(f"Error getting aggregated stats: {str(e)}")
             return {
                 'professional': {'avg_rate': 0, 'ga_prof_mar': 0, 'ga_prof_pct': 0, 'medicare_prof_mar': 0, 'medicare_prof_pct': 0, 'record_count': 0},
-                'facility': {'avg_rate': 0, 'ga_op_mar': 0, 'ga_asc_mar': 0, 'medicare_op_mar_stateavg': 0, 'medicare_asc_mar_stateavg': 0, 'record_count': 0}
+                'facility': {'avg_rate': 0, 'ga_op_mar': 0, 'ga_op_pct': 0, 'ga_asc_mar': 0, 'ga_asc_pct': 0, 'medicare_op_mar_stateavg': 0, 'medicare_op_pct': 0, 'medicare_asc_mar_stateavg': 0, 'medicare_asc_pct': 0, 'record_count': 0}
             }
 
     def get_sample_records(self, filters: Optional[Dict[str, Any]] = None, limit: int = 10) -> List[Dict[str, Any]]:
@@ -314,7 +338,7 @@ class ParquetDataManager:
                 SELECT 
                     payer, org_name, procedure_set, procedure_class, procedure_group,
                     cbsa, billing_code, billing_class, rate, code_desc, primary_taxonomy_desc,
-                    GA_PROF_MAR, medicare_prof
+                    primary_taxonomy_code, tin_value, GA_PROF_MAR, medicare_prof
                 FROM commercial_rates
                 WHERE {where_sql}
                 LIMIT {limit}
@@ -334,8 +358,10 @@ class ParquetDataManager:
                     'rate': float(row[8]) if row[8] else 0,
                     'code_desc': row[9] if row[9] else '',
                     'primary_taxonomy_desc': row[10] if row[10] else '',
-                    'ga_prof_mar': float(row[11]) if row[11] else 0,
-                    'medicare_prof_mar': float(row[12]) if row[12] else 0
+                    'primary_taxonomy_code': row[11] if row[11] else '',
+                    'tin_value': row[12] if row[12] else '',
+                    'ga_prof_mar': float(row[13]) if row[13] else 0,
+                    'medicare_prof_mar': float(row[14]) if row[14] else 0
                 }
                 for row in result
             ]
