@@ -30,6 +30,7 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 ALLOWED_HOSTS = [
     'workcomp-rates.com',
     'www.workcomp-rates.com',
+    'workcomp-rates.ngrok.io',
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
@@ -40,6 +41,7 @@ ALLOWED_HOSTS = [
 CSRF_TRUSTED_ORIGINS = [
     'https://workcomp-rates.com',
     'https://www.workcomp-rates.com',
+    'https://workcomp-rates.ngrok.io',
     'http://localhost:8000',
     'http://127.0.0.1:8000'
 ]
