@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to pull production database locally
-# Usage: ./pull_prod_db.sh
+# Usage: ./pull_prod_db.sh (run in Git Bash on Windows)
 
 set -e
 
@@ -40,19 +40,23 @@ if [ $? -eq 0 ]; then
     echo "📊 You can now inspect users and sign-ins locally"
     echo "💾 Local backup saved in: $LOCAL_BACKUP_DIR/"
     
-    # Show database info
-    echo ""
-    echo "📋 Database information:"
-    python manage.py shell -c "
+            # Show database info
+        echo ""
+        echo "📋 Database information:"
+        python manage.py shell -c "
 from django.contrib.auth.models import User
 from django.db import connection
+import pytz
+est_tz = pytz.timezone('America/New_York')
+
 cursor = connection.cursor()
 cursor.execute('SELECT COUNT(*) FROM auth_user')
 user_count = cursor.fetchone()[0]
 print(f'Total users: {user_count}')
 print(f'Recent users:')
 for user in User.objects.order_by('-date_joined')[:5]:
-    print(f'  - {user.username} ({user.email}) - Joined: {user.date_joined}')
+    est_joined = user.date_joined.astimezone(est_tz)
+    print(f'  - {user.username} ({user.email}) - Joined: {est_joined.strftime(\"%Y-%m-%d %I:%M %p EST\")}')
 "
     
 else

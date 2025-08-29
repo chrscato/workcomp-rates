@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.conf import settings
 
 # Create your models here.
 
@@ -20,7 +21,7 @@ class UserActivity(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='activities')
     action = models.CharField(max_length=50, choices=ACTION_CHOICES)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     page_url = models.URLField(max_length=500, blank=True)
     page_title = models.CharField(max_length=200, blank=True)
     additional_data = models.JSONField(default=dict, blank=True)  # For storing extra context

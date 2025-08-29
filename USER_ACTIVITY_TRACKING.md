@@ -25,14 +25,14 @@ This system automatically tracks user actions and page views with timestamps and
 
 ### 1. Pull Production Database Locally
 
-**Option A: PowerShell (Windows)**
-```powershell
-.\pull_prod_db.ps1
-```
-
-**Option B: Bash (Linux/Mac)**
+**Option A: Git Bash (Windows)**
 ```bash
 ./pull_prod_db.sh
+```
+
+**Option B: PowerShell (Windows)**
+```powershell
+.\pull_prod_db.ps1
 ```
 
 **Option C: Manual**
@@ -119,10 +119,17 @@ The `UserActivity` model stores:
 
 - **user**: Foreign key to Django User
 - **action**: Type of activity performed
-- **timestamp**: When the activity occurred
+- **timestamp**: When the activity occurred (stored in UTC, displayed in EST)
 - **page_url**: URL of the page (for page views)
 - **page_title**: Title of the page (for page views)
 - **additional_data**: JSON field for extra context
+
+## Timezone Information
+
+- **Database Storage**: All timestamps are stored in UTC (Django best practice)
+- **Display**: All timestamps are automatically converted to US Eastern Time (EST/EDT)
+- **Timezone**: America/New_York (automatically handles daylight saving time)
+- **Format**: MMM DD, YYYY HH:MM AM/PM EST (e.g., "Jan 15, 2025 02:30 PM EST")
 
 ## Adding Custom Tracking
 

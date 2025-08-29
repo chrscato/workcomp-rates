@@ -13,7 +13,11 @@
                 </h1>
                 
                 <!-- Date Range Filter -->
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center">
+                    <small class="text-muted me-3">
+                        <i class="bi bi-clock me-1"></i>
+                        Current Time: {{ current_est_time|date:"M j, Y g:i A" }} {{ est_timezone_name }}
+                    </small>
                     <select class="form-select" id="daysFilter" onchange="filterByDays(this.value)">
                         <option value="1" {% if days == 1 %}selected{% endif %}>Last 24 hours</option>
                         <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
@@ -191,11 +195,11 @@
                             <tbody>
                                 {% for activity in recent_activities %}
                                 <tr>
-                                    <td>
-                                        <small class="text-muted">
-                                            {{ activity.timestamp|date:"M j, Y g:i A" }}
-                                        </small>
-                                    </td>
+                                                                    <td>
+                                    <small class="text-muted">
+                                        {{ activity.timestamp|date:"M j, Y g:i A" }} EST
+                                    </small>
+                                </td>
                                     <td>
                                         <span class="badge bg-secondary">{{ activity.user.username }}</span>
                                     </td>

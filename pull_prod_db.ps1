@@ -52,13 +52,17 @@ try {
         python manage.py shell -c "
 from django.contrib.auth.models import User
 from django.db import connection
+import pytz
+est_tz = pytz.timezone('America/New_York')
+
 cursor = connection.cursor()
 cursor.execute('SELECT COUNT(*) FROM auth_user')
 user_count = cursor.fetchone()[0]
 print(f'Total users: {user_count}')
 print(f'Recent users:')
 for user in User.objects.order_by('-date_joined')[:5]:
-    print(f'  - {user.username} ({user.email}) - Joined: {user.date_joined}')
+    est_joined = user.date_joined.astimezone(est_tz)
+    print(f'  - {user.username} ({user.email}) - Joined: {est_joined.strftime(\"%Y-%m-%d %I:%M %p EST\")}')
 "
         
     } else {

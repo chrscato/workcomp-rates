@@ -4,6 +4,7 @@ from core.models import UserActivity
 from django.utils import timezone
 from datetime import timedelta
 from django.db import models
+import pytz
 
 class Command(BaseCommand):
     help = 'View user activity data and statistics'
@@ -84,9 +85,13 @@ class Command(BaseCommand):
         
         # Recent activities
         self.stdout.write(f'\n🕒 Recent Activities (Last {recent}):')
+        est_tz = pytz.timezone('America/New_York')
         for activity in recent_activities:
+            # Convert to EST and format
+            est_time = activity.timestamp.astimezone(est_tz)
+            time_str = est_time.strftime("%Y-%m-%d %I:%M %p EST")
             self.stdout.write(
-                f'  {activity.timestamp.strftime("%Y-%m-%d %H:%M")} | '
+                f'  {time_str} | '
                 f'{activity.user.username} | {activity.action} | '
                 f'{activity.page_url}'
             )
