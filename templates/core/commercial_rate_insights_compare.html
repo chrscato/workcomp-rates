@@ -5,10 +5,15 @@
 {% block title %}{{ state_name }} Comparison - WorkComp Rates{% endblock %}
 
 {% block extra_head %}
+<!-- jQuery (required for Select2) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <!-- Select2 for enhanced dropdowns -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <!-- Plotly for data visualization -->
 <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+<!-- Shared filter styles -->
+<link rel="stylesheet" href="{% static 'css/shared_filters.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -36,204 +41,8 @@
             </div>
         </div>
 
-        <!-- Active Filters Summary -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="active-filters-summary" id="activeFiltersSummary" style="display: none;">
-                    <div class="alert alert-info d-flex align-items-center justify-content-between">
-                        <div>
-                            <i class="fas fa-filter"></i>
-                            <strong>Active Filters:</strong>
-                            <span id="activeFiltersText">No filters applied</span>
-                        </div>
-                            <button type="button" class="btn btn-sm btn-outline-info" onclick="clearAllFilters()">
-                                <i class="fas fa-times"></i> Clear All
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Filters Card -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card shadow-sm">
-                    <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="toggleFilters()">
-                        <div class="d-flex align-items-center">
-                            <h5 class="card-title mb-0 me-2">
-                                <i class="fas fa-filter"></i> Filters
-                            </h5>
-                            <small class="text-muted">(Click here to expand/collapse view)</small>
-                        </div>
-                        <i class="fas fa-chevron-right" id="filterToggleIcon"></i>
-                    </div>
-                    <div class="card-body" id="filterCardBody" style="display: none;">
-                        <form method="get" id="filterForm">
-                            <!-- Tier 1: High-Level Filters -->
-                            <div class="filter-tier">
-                                <h6 class="filter-tier-title">
-                                    <i class="fas fa-globe text-primary"></i>
-                                    High-Level Filters
-                                </h6>
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <label for="payer" class="form-label fw-bold">
-                                            <i class="fas fa-building text-info"></i> Payer
-                                        </label>
-                                <select class="form-select filter-select select2-dropdown" id="payer" name="payer" data-filter="payer">
-                                    <option value="">All Payers</option>
-                                    {% for payer in filters.payers %}
-                                        <option value="{{ payer }}" {% if payer == active_filters.payer %}selected{% endif %}>{{ payer }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                                    <div class="col-md-6">
-                                        <label for="org_name" class="form-label fw-bold">
-                                            <i class="fas fa-hospital text-success"></i> Organization
-                                        </label>
-                                <select class="form-select filter-select select2-dropdown" id="org_name" name="org_name" data-filter="org_name">
-                                    <option value="">All Organizations</option>
-                                    {% for org in filters.organizations %}
-                                        <option value="{{ org }}" {% if org == active_filters.org_name %}selected{% endif %}>{{ org }}</option>
-                                    {% endfor %}
-                                </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Tier 2: Geographic & Regional Filters -->
-                            <div class="filter-tier">
-                                <h6 class="filter-tier-title">
-                                    <i class="fas fa-map-marker-alt text-warning"></i>
-                                    Geographic & Regional
-                                </h6>
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <label for="cbsa" class="form-label fw-bold">
-                                            <i class="fas fa-map text-warning"></i> CBSA Region
-                                        </label>
-                                        <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa">
-                                            <option value="">All Regions</option>
-                                            {% for region in filters.cbsa_regions %}
-                                                <option value="{{ region }}" {% if region == active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="tin_value" class="form-label fw-bold">
-                                            <i class="fas fa-id-card text-secondary"></i> TIN #
-                                        </label>
-                                        <select class="form-select filter-select select2-dropdown" id="tin_value" name="tin_value" data-filter="tin_value">
-                                            <option value="">All TINs</option>
-                                            {% for tin in filters.tin_values %}
-                                                <option value="{{ tin }}" {% if tin == active_filters.tin_value %}selected{% endif %}>{{ tin }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Tier 3: Procedure & Service Filters -->
-                            <div class="filter-tier">
-                                <h6 class="filter-tier-title">
-                                    <i class="fas fa-stethoscope text-danger"></i>
-                                    Procedure & Service Classification
-                                </h6>
-                                <div class="row g-2">
-                                    <div class="col-md-4">
-                                        <label for="procedure_set" class="form-label fw-bold">
-                                            <i class="fas fa-layer-group text-danger"></i> Procedure Set
-                                        </label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set" data-filter="procedure_set">
-                                    <option value="">All Sets</option>
-                                    {% for set in filters.procedure_sets %}
-                                        <option value="{{ set }}" {% if set == active_filters.procedure_set %}selected{% endif %}>{{ set }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                                    <div class="col-md-4">
-                                        <label for="procedure_class" class="form-label fw-bold">
-                                            <i class="fas fa-tags text-danger"></i> Procedure Class
-                                        </label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class">
-                                    <option value="">All Classes</option>
-                                    {% for class in filters.procedure_classes %}
-                                        <option value="{{ class }}" {% if class == active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                        <label for="procedure_group" class="form-label fw-bold">
-                                            <i class="fas fa-object-group text-danger"></i> Procedure Group
-                                        </label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group">
-                                    <option value="">All Groups</option>
-                                    {% for group in filters.procedure_groups %}
-                                        <option value="{{ group }}" {% if group == active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Tier 4: Detailed Service & Provider Filters -->
-                            <div class="filter-tier">
-                                <h6 class="filter-tier-title">
-                                    <i class="fas fa-microscope text-info"></i>
-                                    Detailed Service & Provider
-                                </h6>
-                                <div class="row g-2">
-                                    <div class="col-md-4">
-                                        <label for="billing_code" class="form-label fw-bold">
-                                            <i class="fas fa-barcode text-info"></i> Billing Code
-                                        </label>
-                                <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code">
-                                    <option value="">All Codes</option>
-                                    {% for code in filters.billing_codes %}
-                                        <option value="{{ code }}" {% if code == active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
-                                    {% endfor %}
-                                </select>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="primary_taxonomy_code" class="form-label fw-bold">
-                                            <i class="fas fa-user-md text-info"></i> Taxonomy Code
-                                        </label>
-                                        <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_code" name="primary_taxonomy_code" data-filter="primary_taxonomy_code">
-                                            <option value="">All Codes</option>
-                                            {% for code in filters.primary_taxonomy_codes %}
-                                                <option value="{{ code }}" {% if code == active_filters.primary_taxonomy_code %}selected{% endif %}>{{ code }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="primary_taxonomy_desc" class="form-label fw-bold">
-                                            <i class="fas fa-user-nurse text-info"></i> Taxonomy Description
-                                        </label>
-                                        <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" data-filter="primary_taxonomy_desc">
-                                            <option value="">All Descriptions</option>
-                                            {% for desc in filters.primary_taxonomy_descs %}
-                                                <option value="{{ desc }}" {% if desc == active_filters.primary_taxonomy_desc %}selected{% endif %}>{{ desc }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Action Buttons -->
-                            <div class="filter-actions">
-                                <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-filter"></i> Apply Filters
-                                </button>
-                                <a href="{% url 'commercial_rate_insights_compare' state_code %}" class="btn btn-outline-secondary btn-lg">
-                                    <i class="fas fa-undo"></i> Reset All
-                                </a>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Shared Filters Template -->
+        {% include 'core/shared_filters.html' %}
 
         <!-- Base State Statistics -->
         <div class="row mb-4">
@@ -564,9 +373,8 @@
 
 {% if has_data %}
     {% block extra_js %}
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <!-- Shared filter functionality -->
+    <script src="{% static 'js/shared_filters.js' %}"></script>
     <style>
         .filter-loading {
             opacity: 0.5;
@@ -768,12 +576,13 @@
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize Select2 for all filter dropdowns
+            // Initialize Select2 for all filter dropdowns with multi-select support
             $('.select2-dropdown').select2({
-                placeholder: 'Type to search...',
+                placeholder: 'Select one or more options...',
                 allowClear: true,
                 width: '100%',
                 minimumInputLength: 0,
+                closeOnSelect: false,
                 templateResult: function(data) {
                     if (data.loading) return data.text;
                     if (!data.id) return data.text;
@@ -900,7 +709,13 @@
                 if (select.value && select.value !== '') {
                     const filterName = select.getAttribute('data-filter') || select.name;
                     const filterValue = select.value;
-                    activeFilters.push(`${filterName}: ${filterValue}`);
+                    
+                    // Handle both single values and arrays
+                    if (Array.isArray(filterValue) && filterValue.length > 0) {
+                        activeFilters.push(`${filterName}: ${filterValue.join(', ')}`);
+                    } else if (typeof filterValue === 'string' && filterValue.trim() !== '') {
+                        activeFilters.push(`${filterName}: ${filterValue}`);
+                    }
                 }
             });
             

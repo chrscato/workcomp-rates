@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ state_name }} Custom Network Analysis - WorkComp Rates{% endblock %}
+
+{% block extra_head %}
+<!-- jQuery (required for Select2) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- Select2 for enhanced dropdowns -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<!-- Plotly for data visualization -->
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+<!-- Shared filter styles -->
+<link rel="stylesheet" href="{% static 'css/shared_filters.css' %}">
+<style>
+    .upload-area {
+        border: 2px dashed #007bff;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .upload-area:hover {
+        border-color: #0056b3;
+        background: #e9ecef;
+    }
+    
+    .upload-area.dragover {
+        border-color: #28a745;
+        background: #d4edda;
+    }
+    
+    .file-input {
+        display: none;
+    }
+    
+    .upload-icon {
+        font-size: 3rem;
+        color: #007bff;
+        margin-bottom: 1rem;
+    }
+    
+    .custom-tins-display {
+        background: #e3f2fd;
+        border: 1px solid #2196f3;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .tin-badge {
+        display: inline-block;
+        background: #2196f3;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        margin: 0.25rem;
+        font-size: 0.9rem;
+    }
+    
+    .network-metrics {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+    
+    .metric-card {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        backdrop-filter: blur(10px);
+    }
+    
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    {% if has_data %}
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">{{ state_name }} Custom Network Analysis</h4>
+                            <p class="text-muted mb-0">Upload your TIN list for personalized network performance analysis</p>
+                        </div>
+                        <div>
+                            <a href="{% url 'commercial_rate_insights_state' state_code %}" class="btn btn-outline-secondary me-2">
+                                <i class="fas fa-arrow-left"></i> Back to State Insights
+                            </a>
+                            <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-map"></i> Back to Map
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-upload text-primary"></i> Upload Your Network TIN List
+                        </h5>
+                        <p class="text-muted mb-0 mt-2">
+                            Drop your Excel, CSV, or TXT file with TIN numbers to analyze your network performance
+                        </p>
+                    </div>
+                    <div class="card-body">
+                        {% if upload_error %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i> {{ upload_error }}
+                            </div>
+                        {% endif %}
+                        
+                        {% if upload_success %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i> Successfully uploaded {{ custom_tins|length }} TIN numbers!
+                            </div>
+                            
+                            <div class="custom-tins-display">
+                                <h6><i class="fas fa-list"></i> Your Network TINs ({{ custom_tins|length }} total):</h6>
+                                <div class="mt-2">
+                                    {% for tin in custom_tins|slice:":20" %}
+                                        <span class="tin-badge">{{ tin }}</span>
+                                    {% endfor %}
+                                    {% if custom_tins|length > 20 %}
+                                        <span class="tin-badge">+{{ custom_tins|length|add:"-20" }} more</span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted mt-2 d-block">
+                                    These TINs are now permanently applied as a filter for your analysis
+                                </small>
+                            </div>
+                        {% endif %}
+                        
+                        <form method="post" enctype="multipart/form-data" id="uploadForm">
+                            {% csrf_token %}
+                            <div class="upload-area" id="uploadArea">
+                                <div class="upload-icon">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                </div>
+                                <h5>Drop your TIN file here</h5>
+                                <p class="text-muted">or click to browse</p>
+                                <small class="text-muted">
+                                    Supported formats: Excel (.xlsx, .xls), CSV (.csv), Text (.txt)
+                                </small>
+                                <input type="file" name="tin_file" id="tinFile" class="file-input" 
+                                       accept=".xlsx,.xls,.csv,.txt">
+                            </div>
+                            <div class="text-center mt-3">
+                                <button type="submit" class="btn btn-primary btn-lg" id="uploadBtn" style="display: none;">
+                                    <i class="fas fa-upload"></i> Upload and Analyze
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Performance Metrics -->
+        {% if network_metrics %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="network-metrics">
+                    <h5 class="mb-3">
+                        <i class="fas fa-chart-line"></i> Your Network Performance Metrics
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="metric-card text-center">
+                                <h6>Network Size</h6>
+                                <h3>{{ network_metrics.network_size|intcomma }}</h3>
+                                <small>TINs in your network</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-card text-center">
+                                <h6>Avg Rate</h6>
+                                <h3>${{ network_metrics.avg_rate|floatformat:0|intcomma }}</h3>
+                                <small>Across all procedures</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-card text-center">
+                                <h6>Coverage</h6>
+                                <h3>{{ network_metrics.coverage_pct|floatformat:1 }}%</h3>
+                                <small>Of state data</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-card text-center">
+                                <h6>Efficiency</h6>
+                                <h3>{{ network_metrics.efficiency_score|floatformat:1 }}</h3>
+                                <small>Performance score</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Shared Filters Template -->
+        {% include 'core/shared_filters.html' %}
+
+        <!-- Base State Statistics -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">{{ state_name }} Network Analysis Statistics</h5>
+                        <p class="text-muted mb-0">Performance metrics with your custom TIN network</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Professional Rates -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Professional Rates</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Avg Rate:</strong></p>
+                                        <p class="text-muted">${{ base_stats.professional.avg_rate|floatformat:0|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Records:</strong></p>
+                                        <p class="text-muted">{{ base_stats.professional.record_count|intcomma }}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>GA WCFS PROF:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.professional.ga_prof_pct|floatformat:1 }}% of GA</p>
+                                        <p class="text-muted small">${{ base_stats.professional.ga_prof_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Medicare:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.professional.medicare_prof_pct|floatformat:1 }}% of Medicare</p>
+                                        <p class="text-muted small">${{ base_stats.professional.medicare_prof_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Facility Rates -->
+                            <div class="col-md-6">
+                                <h6 class="text-info">Facility Rates</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Avg Rate:</strong></p>
+                                        <p class="text-muted">${{ base_stats.facility.avg_rate|floatformat:0|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>Records:</strong></p>
+                                        <p class="text-muted">{{ base_stats.facility.record_count|intcomma }}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>GA WCFS OP MAR:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.facility.ga_op_pct|floatformat:1 }}% of GA OP</p>
+                                        <p class="text-muted small">${{ base_stats.facility.ga_op_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>GA WCFS ASC MAR:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.facility.ga_asc_pct|floatformat:1 }}% of GA ASC</p>
+                                        <p class="text-muted small">${{ base_stats.facility.ga_asc_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>MEDICARE OP MAR:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.facility.medicare_op_pct|floatformat:1 }}% of Medicare OP</p>
+                                        <p class="text-muted small">${{ base_stats.facility.medicare_op_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1"><strong>MEDICARE ASC MAR:</strong></p>
+                                        <p class="text-muted h5">{{ base_stats.facility.medicare_asc_pct|floatformat:1 }}% of Medicare ASC</p>
+                                        <p class="text-muted small">${{ base_stats.facility.medicare_asc_mar|floatformat:2|intcomma }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <!-- Error State -->
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Data Not Available</h5>
+                    <p>{{ error_message }}</p>
+                    <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-danger">
+                        <i class="fas fa-arrow-left"></i> Back to Map
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Shared filter functionality -->
+<script src="{% static 'js/shared_filters.js' %}"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('tinFile');
+        const uploadBtn = document.getElementById('uploadBtn');
+        
+        // Click to browse
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                uploadBtn.style.display = 'inline-block';
+                uploadArea.style.borderColor = '#28a745';
+                uploadArea.style.background = '#d4edda';
+            }
+        });
+        
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                uploadBtn.style.display = 'inline-block';
+                uploadArea.style.borderColor = '#28a745';
+                uploadArea.style.background = '#d4edda';
+            }
+        });
+    });
+</script>
+{% endblock %}

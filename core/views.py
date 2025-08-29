@@ -8,6 +8,8 @@ from datetime import timedelta
 from .utils.parquet_utils import ParquetDataManager
 from .models import UserActivity
 from django.db import models
+import pandas as pd
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -71,16 +73,16 @@ def commercial_rate_insights_state(request, state_code):
         
         # Get active filters from request
         active_filters = {
-            'payer': request.GET.get('payer'),
-            'org_name': request.GET.get('org_name'),
-            'procedure_set': request.GET.get('procedure_set'),
-            'procedure_class': request.GET.get('procedure_class'),
-            'procedure_group': request.GET.get('procedure_group'),
-            'cbsa': request.GET.get('cbsa'),
-            'billing_code': request.GET.get('billing_code'),
-            'tin_value': request.GET.get('tin_value'),
-            'primary_taxonomy_code': request.GET.get('primary_taxonomy_code'),
-            'primary_taxonomy_desc': request.GET.get('primary_taxonomy_desc')
+            'payer': request.GET.getlist('payer'),
+            'org_name': request.GET.getlist('org_name'),
+            'procedure_set': request.GET.getlist('procedure_set'),
+            'procedure_class': request.GET.getlist('procedure_class'),
+            'procedure_group': request.GET.getlist('procedure_group'),
+            'cbsa': request.GET.getlist('cbsa'),
+            'billing_code': request.GET.getlist('billing_code'),
+            'tin_value': request.GET.getlist('tin_value'),
+            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
         }
         
         # Remove empty filters
@@ -147,16 +149,16 @@ def commercial_rate_insights(request):
         
         # Get active filters from request
         active_filters = {
-            'payer': request.GET.get('payer'),
-            'org_name': request.GET.get('org_name'),
-            'procedure_set': request.GET.get('procedure_set'),
-            'procedure_class': request.GET.get('procedure_class'),
-            'procedure_group': request.GET.get('procedure_group'),
-            'cbsa': request.GET.get('cbsa'),
-            'billing_code': request.GET.get('billing_code'),
-            'tin_value': request.GET.get('tin_value'),
-            'primary_taxonomy_code': request.GET.get('primary_taxonomy_code'),
-            'primary_taxonomy_desc': request.GET.get('primary_taxonomy_desc')
+            'payer': request.GET.getlist('payer'),
+            'org_name': request.GET.getlist('org_name'),
+            'procedure_set': request.GET.getlist('procedure_set'),
+            'procedure_class': request.GET.getlist('procedure_class'),
+            'procedure_group': request.GET.getlist('procedure_group'),
+            'cbsa': request.GET.getlist('cbsa'),
+            'billing_code': request.GET.getlist('billing_code'),
+            'tin_value': request.GET.getlist('tin_value'),
+            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
         }
         
         # Remove empty filters
@@ -203,8 +205,8 @@ def commercial_rate_insights(request):
 @login_required
 def commercial_rate_insights_compare(request, state_code):
     """
-    State-specific Commercial Rate Insights Comparison View
-    Shows side-by-side comparison of organizations and payers for a specific state
+    State-specific Commercial Rate Comparison Dashboard
+    Allows side-by-side comparison of organizations and payers
     """
     try:
         # Validate state code
@@ -225,53 +227,20 @@ def commercial_rate_insights_compare(request, state_code):
         
         # Get active filters from request
         active_filters = {
-            'payer': request.GET.get('payer'),
-            'org_name': request.GET.get('org_name'),
-            'procedure_set': request.GET.get('procedure_set'),
-            'procedure_class': request.GET.get('procedure_class'),
-            'procedure_group': request.GET.get('procedure_group'),
-            'cbsa': request.GET.get('cbsa'),
-            'billing_code': request.GET.get('billing_code'),
-            'tin_value': request.GET.get('tin_value'),
-            'primary_taxonomy_code': request.GET.get('primary_taxonomy_code'),
-            'primary_taxonomy_desc': request.GET.get('primary_taxonomy_desc')
+            'payer': request.GET.getlist('payer'),
+            'org_name': request.GET.getlist('org_name'),
+            'procedure_set': request.GET.getlist('procedure_set'),
+            'procedure_class': request.GET.getlist('procedure_class'),
+            'procedure_group': request.GET.getlist('procedure_group'),
+            'cbsa': request.GET.getlist('cbsa'),
+            'billing_code': request.GET.getlist('billing_code'),
+            'tin_value': request.GET.getlist('tin_value'),
+            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
         }
         
         # Remove empty filters
         active_filters = {k: v for k, v in active_filters.items() if v}
-        
-        # Get selected entities for comparison
-        compare_orgs = request.GET.getlist('compare_orgs[]', [])
-        compare_payers = request.GET.getlist('compare_payers[]', [])
-        
-        # Get comparison data
-        comparison_data = []
-        if compare_orgs or compare_payers:
-            # Process organizations
-            for org in compare_orgs:
-                # Combine org filter with active filters
-                org_filters = {**active_filters, 'org_name': org}
-                stats = data_manager.get_aggregated_stats(org_filters)
-                sample_records = data_manager.get_sample_records(org_filters, limit=5)
-                comparison_data.append({
-                    'name': org,
-                    'type': 'organization',
-                    'stats': stats,
-                    'sample_records': sample_records
-                })
-            
-            # Process payers
-            for payer in compare_payers:
-                # Combine payer filter with active filters
-                payer_filters = {**active_filters, 'payer': payer}
-                stats = data_manager.get_aggregated_stats(payer_filters)
-                sample_records = data_manager.get_sample_records(payer_filters, limit=5)
-                comparison_data.append({
-                    'name': payer,
-                    'type': 'payer',
-                    'stats': stats,
-                    'sample_records': sample_records
-                })
         
         # Get filtered options for each field based on current selections
         filters = {
@@ -284,41 +253,290 @@ def commercial_rate_insights_compare(request, state_code):
             'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
             'tin_values': data_manager.get_unique_values('tin_value', active_filters),
             'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
-            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
+            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters)
         }
         
-        # Get base state statistics (without comparison filters)
-        base_stats = data_manager.get_aggregated_stats(active_filters)
+        # Get base statistics with current filters
+        base_stats = data_manager.get_base_statistics(active_filters)
+        
+        # Get comparison data
+        comparison_data = data_manager.get_comparison_data(active_filters)
         
         context = {
+            'has_data': True,
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code),
             'filters': filters,
-            'base_stats': base_stats,
             'active_filters': active_filters,
+            'base_stats': base_stats,
+            'comparison_data': comparison_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in commercial_rate_insights_compare view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': f'An error occurred while loading comparison data: {str(e)}',
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code) if 'state_code' in locals() else 'Unknown'
+        }
+    
+    return render(request, 'core/commercial_rate_insights_compare.html', context)
+
+
+@login_required
+def custom_network_analysis(request, state_code):
+    """
+    Custom Network Analysis Dashboard
+    Allows users to upload their own TIN list for personalized network performance analysis
+    """
+    try:
+        # Validate state code
+        state_code = state_code.upper()
+        available_states = ParquetDataManager.get_available_states()
+        
+        if state_code not in available_states or available_states[state_code] != 'available':
+            context = {
+                'has_data': False,
+                'error_message': f'Sorry, {state_code} data is not available yet. Please try another state.',
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            return render(request, 'core/custom_network_analysis.html', context)
+        
+        # Initialize data manager with state-specific file
+        data_manager = ParquetDataManager(state=state_code)
+        
+        # Handle file upload
+        custom_tins = []
+        upload_error = None
+        upload_success = False
+        
+        if request.method == 'POST' and request.FILES.get('tin_file'):
+            try:
+                uploaded_file = request.FILES['tin_file']
+                file_content = uploaded_file.read().decode('utf-8')
+                
+                # Determine file type and parse accordingly
+                if uploaded_file.name.endswith('.csv'):
+                    # Parse CSV
+                    df = pd.read_csv(io.StringIO(file_content))
+                    # Look for TIN column (case insensitive)
+                    tin_columns = [col for col in df.columns if 'tin' in col.lower() or 'tax' in col.lower()]
+                    if tin_columns:
+                        custom_tins = df[tin_columns[0]].dropna().astype(str).tolist()
+                    else:
+                        # Assume first column contains TINs
+                        custom_tins = df.iloc[:, 0].dropna().astype(str).tolist()
+                        
+                elif uploaded_file.name.endswith(('.xlsx', '.xls')):
+                    # Parse Excel
+                    df = pd.read_excel(io.BytesIO(uploaded_file.read()))
+                    # Look for TIN column (case insensitive)
+                    tin_columns = [col for col in df.columns if 'tin' in col.lower() or 'tax' in col.lower()]
+                    if tin_columns:
+                        custom_tins = df[tin_columns[0]].dropna().astype(str).tolist()
+                    else:
+                        # Assume first column contains TINs
+                        custom_tins = df.iloc[:, 0].dropna().astype(str).tolist()
+                        
+                elif uploaded_file.name.endswith('.txt'):
+                    # Parse TXT (one TIN per line)
+                    custom_tins = [line.strip() for line in file_content.split('\n') if line.strip()]
+                    
+                else:
+                    upload_error = "Unsupported file format. Please use CSV, Excel, or TXT files."
+                
+                # Clean and validate TINs
+                if custom_tins:
+                    # Remove any non-numeric characters and validate
+                    cleaned_tins = []
+                    for tin in custom_tins:
+                        # Extract numeric characters only
+                        clean_tin = ''.join(filter(str.isdigit, str(tin)))
+                        if clean_tin and len(clean_tin) >= 9:  # Basic TIN validation
+                            cleaned_tins.append(clean_tin)
+                    
+                    custom_tins = cleaned_tins
+                    
+                    if not custom_tins:
+                        upload_error = "No valid TIN numbers found in the uploaded file."
+                    else:
+                        upload_success = True
+                        # Store in session for persistence
+                        request.session[f'custom_tins_{state_code}'] = custom_tins
+                        
+            except Exception as e:
+                upload_error = f"Error processing file: {str(e)}"
+        
+        # Get custom TINs from session if no new upload
+        if not custom_tins and not upload_error:
+            custom_tins = request.session.get(f'custom_tins_{state_code}', [])
+            if custom_tins:
+                upload_success = True
+        
+        # Get active filters (always include custom TINs if available)
+        active_filters = {
+            'payer': request.GET.getlist('payer'),
+            'org_name': request.GET.getlist('org_name'),
+            'procedure_set': request.GET.getlist('procedure_set'),
+            'procedure_class': request.GET.getlist('procedure_class'),
+            'procedure_group': request.GET.getlist('procedure_group'),
+            'cbsa': request.GET.getlist('cbsa'),
+            'billing_code': request.GET.getlist('billing_code'),
+            'tin_value': custom_tins + request.GET.getlist('tin_value'),  # Combine custom TINs with manual selections
+            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
+            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
+        }
+        
+        # Remove empty filters
+        active_filters = {k: v for k, v in active_filters.items() if v}
+        
+        # Get filtered options for each field based on current selections
+        filters = {
+            'payers': data_manager.get_unique_values('payer', active_filters),
+            'organizations': data_manager.get_unique_values('org_name', active_filters),
+            'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
+            'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
+            'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
+            'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
+            'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
+            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
+            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters)
+        }
+        
+        # Get base statistics with current filters
+        base_stats = data_manager.get_base_statistics(active_filters)
+        
+        # Get comparison data
+        comparison_data = data_manager.get_comparison_data(active_filters)
+        
+        # Get network performance metrics for custom TINs
+        network_metrics = None
+        if custom_tins:
+            network_metrics = data_manager.get_network_performance_metrics(custom_tins, active_filters)
+        
+        context = {
+            'has_data': True,
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code),
+            'filters': filters,
+            'active_filters': active_filters,
+            'base_stats': base_stats,
             'comparison_data': comparison_data,
-            'compare_orgs_selected': compare_orgs,
-            'compare_payers_selected': compare_payers,
+            'custom_tins': custom_tins,
+            'upload_error': upload_error,
+            'upload_success': upload_success,
+            'network_metrics': network_metrics
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in custom_network_analysis view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': f'An error occurred while loading custom network analysis: {str(e)}',
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code) if 'state_code' in locals() else 'Unknown'
+        }
+    
+    return render(request, 'core/custom_network_analysis.html', context)
+
+
+@login_required
+def commercial_rate_insights_overview(request, state_code):
+    """
+    State Overview Page - Shows distinct payers, organizations, and procedure sets
+    Allows users to set prefilters before going to the detailed insights page
+    """
+    try:
+        # Validate state code
+        state_code = state_code.upper()
+        available_states = ParquetDataManager.get_available_states()
+        
+        # Debug logging for request parameters
+        logger.info(f"Overview request - State: {state_code}")
+        logger.info(f"Request GET params: {dict(request.GET)}")
+        logger.info(f"Available states: {available_states}")
+        
+        if state_code not in available_states or available_states[state_code] != 'available':
+            context = {
+                'has_data': False,
+                'error_message': f'Sorry, {state_code} data is not available yet. Please try another state.',
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            return render(request, 'core/commercial_rate_insights_overview.html', context)
+        
+        # Initialize data manager with state-specific file
+        data_manager = ParquetDataManager(state=state_code)
+        logger.info(f"Data manager initialized with file: {data_manager.file_path}")
+        logger.info(f"Data manager has_data: {data_manager.has_data}")
+        
+        # Get overview statistics without any filters (full dataset)
+        overview_stats = data_manager.get_overview_statistics()
+        
+        # Get active prefilters from request
+        active_prefilters = {
+            'payer': request.GET.getlist('payer'),
+            'org_name': request.GET.getlist('org_name'),
+            'procedure_set': request.GET.getlist('procedure_set'),
+            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc'),
+            'tin_value': request.GET.getlist('tin_value'),
+        }
+        
+        # Remove empty prefilters
+        active_prefilters = {k: v for k, v in active_prefilters.items() if v}
+        
+        logger.info(f"Active prefilters after filtering: {active_prefilters}")
+        logger.info(f"Request GET params: {dict(request.GET)}")
+        logger.info(f"Payer list: {active_prefilters.get('payer', [])}")
+        logger.info(f"Org list: {active_prefilters.get('org_name', [])}")
+        
+        # Get filtered options for each field based on current prefilter selections
+        # This helps users see what's available after applying prefilters
+        filtered_options = {
+            'payers': data_manager.get_unique_values('payer', active_prefilters),
+            'organizations': data_manager.get_unique_values('org_name', active_prefilters),
+            'procedure_sets': data_manager.get_unique_values('procedure_set', active_prefilters),
+            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_prefilters),
+            'tin_values': data_manager.get_unique_values('tin_value', active_prefilters),
+        }
+        
+        logger.info(f"Filtered options - Payers: {len(filtered_options['payers'])}, Orgs: {len(filtered_options['organizations'])}, Proc Sets: {len(filtered_options['procedure_sets'])}")
+        
+        # Get sample records with prefilters applied (limited for performance)
+        sample_records = data_manager.get_sample_records(active_prefilters, limit=5)
+        
+        context = {
+            'overview_stats': overview_stats,
+            'filtered_options': filtered_options,
+            'active_prefilters': active_prefilters,
+            'sample_records': sample_records,
             'has_data': True,
             'state_code': state_code,
             'state_name': ParquetDataManager.get_state_name(state_code)
         }
         
         # Debug logging
-        logger.info(f"Compare view - State: {state_code}")
-        logger.info(f"Active filters: {active_filters}")
-        logger.info(f"Compare orgs: {compare_orgs}")
-        logger.info(f"Compare payers: {compare_payers}")
-        logger.info(f"Comparison data count: {len(comparison_data)}")
+        logger.info(f"Overview - State: {state_code}")
+        logger.info(f"Active prefilters: {active_prefilters}")
+        logger.info(f"Overview stats: {overview_stats}")
+        logger.info(f"Sample records count: {len(sample_records)}")
             
     except Exception as e:
-        logger.error(f"Error in commercial_rate_insights_compare view: {str(e)}")
+        logger.error(f"Error in commercial_rate_insights_overview view: {str(e)}")
+        logger.error(f"Exception details: {e.__class__.__name__}: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         context = {
             'has_data': False,
-            'error_message': 'An error occurred while processing the comparison data.',
+            'error_message': 'An error occurred while processing the data.',
             'state_code': state_code,
             'state_name': ParquetDataManager.get_state_name(state_code)
         }
     
-    return render(request, 'core/commercial_rate_insights_compare.html', context)
+    return render(request, 'core/commercial_rate_insights_overview.html', context)
 
 
 @login_required

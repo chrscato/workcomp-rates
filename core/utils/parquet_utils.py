@@ -123,7 +123,15 @@ class ParquetDataManager:
         if filters:
             for col, val in filters.items():
                 if val and val != '':
-                    where_clauses.append(f"{col} = '{val}'")
+                    if isinstance(val, list):
+                        # Handle multiple values with IN clause
+                        if val:  # Check if list is not empty
+                            values = [f"'{v}'" for v in val if v]  # Filter out empty values
+                            if values:
+                                where_clauses.append(f"{col} IN ({', '.join(values)})")
+                    else:
+                        # Handle single value
+                        where_clauses.append(f"{col} = '{val}'")
         return " AND ".join(where_clauses) if where_clauses else "1=1"
 
     def get_unique_values(self, column: str, filters: Optional[Dict[str, Any]] = None) -> List[Any]:
@@ -425,3 +433,320 @@ class ParquetDataManager:
         except Exception as e:
             logger.error(f"Error getting comparison stats: {str(e)}")
             return {}
+
+    def get_overview_statistics(self) -> Dict[str, Any]:
+        """Get overview statistics for the dataset without heavy processing."""
+        try:
+            con = duckdb.connect(database=':memory:')
+            
+            if self.has_data:
+                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
+            else:
+                # Use sample data
+                sample_df = self._get_sample_data()
+                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            
+            # Get distinct counts for key fields
+            overview_query = """
+                SELECT 
+                    COUNT(DISTINCT payer) as distinct_payers,
+                    COUNT(DISTINCT org_name) as distinct_organizations,
+                    COUNT(DISTINCT procedure_set) as distinct_procedure_sets,
+                    COUNT(DISTINCT procedure_class) as distinct_procedure_classes,
+                    COUNT(DISTINCT procedure_group) as distinct_procedure_groups,
+                    COUNT(DISTINCT cbsa) as distinct_cbsa_regions,
+                    COUNT(DISTINCT billing_code) as distinct_billing_codes,
+                    COUNT(DISTINCT primary_taxonomy_code) as distinct_taxonomy_codes,
+                    COUNT(*) as total_records,
+                    COUNT(CASE WHEN rate IS NOT NULL THEN 1 END) as records_with_rates,
+                    COUNT(CASE WHEN billing_class = 'professional' THEN 1 END) as professional_records,
+                    COUNT(CASE WHEN billing_class = 'institutional' THEN 1 END) as institutional_records
+                FROM commercial_rates
+            """
+            
+            result = con.execute(overview_query).fetchone()
+            
+            # Get top 10 values for key fields
+            top_payers_query = """
+                SELECT payer, COUNT(*) as count
+                FROM commercial_rates
+                GROUP BY payer
+                ORDER BY count DESC
+                LIMIT 10
+            """
+            
+            top_orgs_query = """
+                SELECT org_name, COUNT(*) as count
+                FROM commercial_rates
+                GROUP BY org_name
+                ORDER BY count DESC
+                LIMIT 10
+            """
+            
+            top_procedure_sets_query = """
+                SELECT procedure_set, COUNT(*) as count
+                FROM commercial_rates
+                GROUP BY procedure_set
+                ORDER BY count DESC
+                LIMIT 10
+            """
+            
+            top_payers = con.execute(top_payers_query).fetchall()
+            top_orgs = con.execute(top_orgs_query).fetchall()
+            top_procedure_sets = con.execute(top_procedure_sets_query).fetchall()
+            
+            return {
+                'summary': {
+                    'distinct_payers': int(result[0]) if result[0] else 0,
+                    'distinct_organizations': int(result[1]) if result[1] else 0,
+                    'distinct_procedure_sets': int(result[2]) if result[2] else 0,
+                    'distinct_procedure_classes': int(result[3]) if result[3] else 0,
+                    'distinct_procedure_groups': int(result[4]) if result[4] else 0,
+                    'distinct_cbsa_regions': int(result[5]) if result[5] else 0,
+                    'distinct_billing_codes': int(result[6]) if result[6] else 0,
+                    'distinct_taxonomy_codes': int(result[7]) if result[7] else 0,
+                    'total_records': int(result[8]) if result[8] else 0,
+                    'records_with_rates': int(result[9]) if result[9] else 0,
+                    'professional_records': int(result[10]) if result[10] else 0,
+                    'institutional_records': int(result[11]) if result[11] else 0,
+                },
+                'top_payers': [{'name': row[0], 'count': int(row[1])} for row in top_payers],
+                'top_organizations': [{'name': row[0], 'count': int(row[1])} for row in top_orgs],
+                'top_procedure_sets': [{'name': row[0], 'count': int(row[1])} for row in top_procedure_sets],
+                'data_coverage': {
+                    'rate_coverage_pct': round((int(result[9]) / int(result[8])) * 100, 1) if result[8] and result[8] > 0 else 0,
+                    'professional_pct': round((int(result[10]) / int(result[8])) * 100, 1) if result[8] and result[8] > 0 else 0,
+                    'institutional_pct': round((int(result[11]) / int(result[8])) * 100, 1) if result[8] and result[8] > 0 else 0,
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting overview statistics: {str(e)}")
+            return {
+                'summary': {},
+                'top_payers': [],
+                'top_organizations': [],
+                'top_procedure_sets': [],
+                'data_coverage': {}
+            }
+
+    def get_base_statistics(self, filters: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Get base statistics for comparison and analysis views."""
+        try:
+            con = duckdb.connect(database=':memory:')
+            
+            if self.has_data:
+                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
+            else:
+                # Use sample data
+                sample_df = self._get_sample_data()
+                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            
+            # Apply filters if provided
+            where_clause = self.build_where_clause(filters) if filters else "1=1"
+            
+            # Get professional and facility statistics
+            stats_query = f"""
+                SELECT 
+                    billing_class,
+                    COUNT(*) as record_count,
+                    AVG(rate) as avg_rate,
+                    AVG(CASE WHEN rate > 0 THEN rate END) as avg_positive_rate
+                FROM commercial_rates
+                WHERE {where_clause}
+                GROUP BY billing_class
+            """
+            
+            result = con.execute(stats_query).fetchall()
+            
+            # Initialize stats
+            stats = {
+                'professional': {'record_count': 0, 'avg_rate': 0, 'ga_prof_pct': 0, 'medicare_prof_pct': 0, 'ga_prof_mar': 0, 'medicare_prof_mar': 0},
+                'facility': {'record_count': 0, 'avg_rate': 0, 'ga_op_pct': 0, 'ga_asc_pct': 0, 'medicare_op_pct': 0, 'medicare_asc_pct': 0, 'ga_op_mar': 0, 'ga_asc_mar': 0, 'medicare_op_mar': 0, 'medicare_asc_mar': 0}
+            }
+            
+            # Process results
+            for row in result:
+                billing_class = row[0]
+                if billing_class == 'professional':
+                    stats['professional']['record_count'] = int(row[1])
+                    stats['professional']['avg_rate'] = float(row[2]) if row[2] else 0
+                elif billing_class == 'institutional':
+                    stats['facility']['record_count'] = int(row[1])
+                    stats['facility']['avg_rate'] = float(row[2]) if row[2] else 0
+            
+            # Calculate percentages and margins (simplified for now)
+            stats['professional']['ga_prof_pct'] = 85.0  # Placeholder
+            stats['professional']['medicare_prof_pct'] = 120.0  # Placeholder
+            stats['professional']['ga_prof_mar'] = 15.0  # Placeholder
+            stats['professional']['medicare_prof_mar'] = 20.0  # Placeholder
+            
+            stats['facility']['ga_op_pct'] = 90.0  # Placeholder
+            stats['facility']['ga_asc_pct'] = 95.0  # Placeholder
+            stats['facility']['medicare_op_pct'] = 110.0  # Placeholder
+            stats['facility']['medicare_asc_pct'] = 105.0  # Placeholder
+            stats['facility']['ga_op_mar'] = 10.0  # Placeholder
+            stats['facility']['ga_asc_mar'] = 5.0  # Placeholder
+            stats['facility']['medicare_op_mar'] = 10.0  # Placeholder
+            stats['facility']['medicare_asc_mar'] = 5.0  # Placeholder
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting base statistics: {str(e)}")
+            return {
+                'professional': {'record_count': 0, 'avg_rate': 0, 'ga_prof_pct': 0, 'medicare_prof_pct': 0, 'ga_prof_mar': 0, 'medicare_prof_mar': 0},
+                'facility': {'record_count': 0, 'avg_rate': 0, 'ga_op_pct': 0, 'ga_asc_pct': 0, 'medicare_op_pct': 0, 'medicare_asc_pct': 0, 'ga_op_mar': 0, 'ga_asc_mar': 0, 'medicare_op_mar': 0, 'medicare_asc_mar': 0}
+            }
+
+    def get_comparison_data(self, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """Get comparison data for organizations and payers."""
+        try:
+            con = duckdb.connect(database=':memory:')
+            
+            if self.has_data:
+                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
+            else:
+                # Use sample data
+                sample_df = self._get_sample_data()
+                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            
+            # Apply filters if provided
+            where_clause = self.build_where_clause(filters) if filters else "1=1"
+            
+            # Get top organizations and payers for comparison
+            org_query = f"""
+                SELECT 
+                    org_name,
+                    COUNT(*) as record_count,
+                    AVG(rate) as avg_rate,
+                    COUNT(DISTINCT procedure_set) as procedure_sets,
+                    COUNT(DISTINCT payer) as payers
+                FROM commercial_rates
+                WHERE {where_clause}
+                GROUP BY org_name
+                ORDER BY record_count DESC
+                LIMIT 10
+            """
+            
+            payer_query = f"""
+                SELECT 
+                    payer,
+                    COUNT(*) as record_count,
+                    AVG(rate) as avg_rate,
+                    COUNT(DISTINCT org_name) as organizations,
+                    COUNT(DISTINCT procedure_set) as procedure_sets
+                FROM commercial_rates
+                WHERE {where_clause}
+                GROUP BY payer
+                ORDER BY record_count DESC
+                LIMIT 10
+            """
+            
+            org_results = con.execute(org_query).fetchall()
+            payer_results = con.execute(payer_query).fetchall()
+            
+            comparison_data = []
+            
+            # Add organizations
+            for row in org_results:
+                comparison_data.append({
+                    'name': row[0],
+                    'type': 'organization',
+                    'record_count': int(row[1]),
+                    'avg_rate': float(row[2]) if row[2] else 0,
+                    'procedure_sets': int(row[3]),
+                    'payers': int(row[4])
+                })
+            
+            # Add payers
+            for row in payer_results:
+                comparison_data.append({
+                    'name': row[0],
+                    'type': 'payer',
+                    'record_count': int(row[1]),
+                    'avg_rate': float(row[2]) if row[2] else 0,
+                    'organizations': int(row[3]),
+                    'procedure_sets': int(row[4])
+                })
+            
+            return comparison_data
+            
+        except Exception as e:
+            logger.error(f"Error getting comparison data: {str(e)}")
+            return []
+
+    def get_network_performance_metrics(self, custom_tins: List[str], filters: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Get network performance metrics for custom TIN list."""
+        try:
+            con = duckdb.connect(database=':memory:')
+            
+            if self.has_data:
+                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
+            else:
+                # Use sample data
+                sample_df = self._get_sample_data()
+                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            
+            # Apply filters and custom TINs
+            base_filters = filters.copy() if filters else {}
+            base_filters['tin_value'] = custom_tins
+            where_clause = self.build_where_clause(base_filters)
+            
+            # Get network metrics
+            metrics_query = f"""
+                SELECT 
+                    COUNT(DISTINCT tin_value) as network_size,
+                    AVG(rate) as avg_rate,
+                    COUNT(*) as total_records,
+                    COUNT(CASE WHEN rate IS NOT NULL THEN 1 END) as records_with_rates
+                FROM commercial_rates
+                WHERE {where_clause}
+            """
+            
+            result = con.execute(metrics_query).fetchone()
+            
+            # Get total state records for coverage calculation
+            total_state_query = "SELECT COUNT(*) FROM commercial_rates"
+            total_state_records = con.execute(total_state_query).fetchone()[0]
+            
+            if result and result[0]:
+                network_size = int(result[0])
+                avg_rate = float(result[1]) if result[1] else 0
+                total_records = int(result[2])
+                records_with_rates = int(result[3])
+                
+                # Calculate coverage percentage
+                coverage_pct = round((total_records / total_state_records) * 100, 1) if total_state_records > 0 else 0
+                
+                # Calculate efficiency score (simplified)
+                efficiency_score = round((records_with_rates / total_records) * 100, 1) if total_records > 0 else 0
+                
+                return {
+                    'network_size': network_size,
+                    'avg_rate': avg_rate,
+                    'total_records': total_records,
+                    'records_with_rates': records_with_rates,
+                    'coverage_pct': coverage_pct,
+                    'efficiency_score': efficiency_score
+                }
+            else:
+                return {
+                    'network_size': 0,
+                    'avg_rate': 0,
+                    'total_records': 0,
+                    'records_with_rates': 0,
+                    'coverage_pct': 0,
+                    'efficiency_score': 0
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting network performance metrics: {str(e)}")
+            return {
+                'network_size': 0,
+                'avg_rate': 0,
+                'total_records': 0,
+                'records_with_rates': 0,
+                'coverage_pct': 0,
+                'efficiency_score': 0
+            }

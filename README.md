@@ -1,192 +1,87 @@
-# WorkComp Rates
+# WorkComp Rates - Commercial Rate Insights Platform
 
-A professional workers' compensation rate analysis and insights platform built with Django.
+A comprehensive platform for analyzing commercial workers' compensation rates across different states, with interactive visualizations and data filtering capabilities.
 
 ## Features
 
-- **Commercial Rate Insights**: Interactive analysis of commercial rate data with advanced filtering
-- **Side-by-Side Comparison**: Compare rates across multiple organizations and payers
-- **User Authentication**: Secure user registration and login system
-- **Modern UI**: Clean, responsive interface built with Bootstrap 5
-- **Data Visualization**: Interactive charts and statistics
-- **Production Ready**: Configured for deployment with proper security settings
+### Interactive State Map
+- Click on any state to view available data
+- Visual indicators for data availability status
+- Seamless navigation between states
 
-## Technology Stack
+### Data Overview Page (NEW!)
+- **Performance Improvement**: Shows dataset statistics before loading detailed insights
+- **Prefilters**: Set key filters (Payer, Organization, Procedure Set) to reduce data size
+- **Data Comprehension**: Understand the scope and coverage of available data
+- **Smart Navigation**: Prefilters are carried forward to the insights page
 
-- **Backend**: Django 5.2+
-- **Database**: SQLite (development) / PostgreSQL (production)
-- **Frontend**: Bootstrap 5, jQuery, Select2, Plotly
-- **Data Processing**: Pandas, PyArrow, DuckDB
-- **Package Management**: uv
-- **Deployment**: Gunicorn, WhiteNoise
+### Detailed Insights Dashboard
+- Interactive charts and visualizations
+- Comprehensive filtering options
+- Rate comparisons and analysis
+- Sample data previews
 
-## Quick Start
+### User Activity Tracking
+- Monitor user interactions and data access patterns
+- Admin dashboard for usage analytics
 
-### Prerequisites
+## User Workflow
 
-- Python 3.12+
-- uv (Python package manager)
+### Optimized Data Exploration Path:
+1. **Map View** → Select a state
+2. **Overview Page** → Review dataset statistics and set prefilters
+3. **Insights Page** → View detailed analysis with improved performance
 
-### Installation
+### Benefits of the New Overview Page:
+- **Faster Loading**: Prefilters reduce the dataset size before processing
+- **Better Understanding**: See data comprehensiveness upfront
+- **Performance Optimization**: Avoid loading unnecessary data
+- **User Control**: Choose what data to analyze before detailed processing
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd workcomp-rates
-   ```
+## Technical Architecture
 
-2. **Install dependencies**
-   ```bash
-   uv sync
-   ```
+- **Backend**: Django with DuckDB for efficient parquet file processing
+- **Frontend**: Bootstrap 5 with interactive JavaScript components
+- **Data Storage**: Parquet files for optimal performance
+- **Caching**: Smart data loading with prefilter optimization
 
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+## Performance Improvements
 
-4. **Run migrations**
-   ```bash
-   uv run python manage.py migrate
-   ```
+The overview page addresses performance issues by:
+1. **Data Prefiltering**: Users can select specific payers, organizations, or procedure sets
+2. **Reduced Data Load**: Only relevant data is processed in the insights page
+3. **Smart Caching**: Efficient parquet file handling with DuckDB
+4. **User Guidance**: Clear understanding of data scope before detailed analysis
 
-5. **Create a superuser**
-   ```bash
-   uv run python manage.py createsuperuser
-   ```
+## Installation & Setup
 
-6. **Run the development server**
-   ```bash
-   uv run python manage.py runserver
-   ```
-
-7. **Visit the application**
-   - Open http://localhost:8000
-   - Register a new account or login with your superuser credentials
-
-## Project Structure
-
-```
-workcomp-rates/
-├── workcomp_rates/          # Django project settings
-├── core/                    # Main application
-│   ├── utils/              # Data processing utilities
-│   ├── templates/          # Core templates
-│   └── views.py           # Core views
-├── accounts/               # User authentication
-│   ├── templates/         # Auth templates
-│   ├── models.py         # User profile model
-│   └── views.py          # Auth views
-├── templates/             # Base templates
-├── static/               # Static files (CSS, JS)
-├── manage.py             # Django management script
-├── pyproject.toml        # Project dependencies
-└── README.md            # This file
-```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-SECRET_KEY=your-secret-key-here
-DEBUG=False
-DATABASE_URL=sqlite:///db.sqlite3
-ALLOWED_HOSTS=workcomp-rates.com,www.workcomp-rates.com
-```
-
-### Production Deployment
-
-1. **Set up your server**
-   - Install Python 3.12+
-   - Install uv: `pip install uv`
-
-2. **Deploy the application**
-   ```bash
-   git clone <repository-url>
-   cd workcomp-rates
-   uv sync
-   uv run python manage.py migrate
-   uv run python manage.py collectstatic
-   ```
-
-3. **Configure your web server**
-   - Set up Nginx/Apache to proxy to Gunicorn
-   - Configure SSL certificates
-   - Set up environment variables
-
-4. **Run with Gunicorn**
-   ```bash
-   uv run gunicorn workcomp_rates.wsgi:application --bind 0.0.0.0:8000
-   ```
-
-## Data Management
-
-### Adding Commercial Rate Data
-
-1. Place your commercial rate data in `core/data/commercial_rates.parquet`
-2. The application will automatically detect and load the data
-3. Ensure the parquet file has the required columns:
-   - `billing_code`
-   - `code_desc`
-   - `org_name`
-   - `payer`
-   - `rate`
-   - `billing_class`
-   - `procedure_set`
-   - `procedure_class`
-   - `procedure_group`
-   - `cbsa`
-   - `primary_taxonomy_desc`
-   - `GA_PROF_MAR`
-   - `medicare_prof`
-   - `GA_OP_MAR`
-   - `medicare_op`
-
-## Development
-
-### Running Tests
 ```bash
-uv run pytest
+# Clone the repository
+git clone <repository-url>
+cd workcomp-rates
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run migrations
+python manage.py migrate
+
+# Start development server
+python manage.py runserver
 ```
 
-### Code Formatting
-```bash
-uv run black .
-```
+## Usage
 
-### Linting
-```bash
-uv run flake8
-```
+1. Navigate to the interactive map
+2. Click on a state to view the overview page
+3. Review dataset statistics and set prefilters as needed
+4. Proceed to detailed insights with improved performance
+5. Use the comprehensive filtering and visualization tools
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+Please read our contributing guidelines and ensure all code follows the project's coding standards.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For support and questions, please contact:
-- Email: christopher@clarity-dx.com
-- Website: https://workcomp-rates.com
-
-## Changelog
-
-### v0.1.0 (2025-08-27)
-- Initial release
-- Commercial rate insights functionality
-- User authentication system
-- Side-by-side comparison tool
-- Modern Bootstrap 5 UI
-- Production-ready configuration 
+[Your License Here] 

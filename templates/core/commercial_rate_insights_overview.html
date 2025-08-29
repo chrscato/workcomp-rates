@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ state_name }} Data Overview - WorkComp Rates{% endblock %}
+
+{% block extra_head %}
+<!-- Select2 for enhanced dropdowns -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .stat-card {
+        transition: transform 0.2s ease-in-out;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    .coverage-bar {
+        height: 8px;
+        border-radius: 4px;
+        background: #e9ecef;
+        overflow: hidden;
+    }
+    .coverage-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #28a745, #20c997);
+        transition: width 0.3s ease;
+    }
+    .top-item {
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: #f8f9fa;
+        margin-bottom: 8px;
+        border-left: 4px solid #007bff;
+    }
+    .prefilter-section {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    {% if has_data %}
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">{{ state_name }} Data Overview</h4>
+                            <p class="text-muted mb-0">State Code: {{ state_code }} • Dataset Statistics & Prefilters</p>
+                        </div>
+                        <div>
+                            <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-secondary me-2">
+                                <i class="fas fa-map"></i> Back to Map
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prefilters Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-filter text-primary"></i> Set Prefilters
+                        </h5>
+                        <p class="text-muted mb-0 mt-2">
+                            Apply prefilters to improve performance when viewing detailed insights. 
+                            These selections will be carried forward to the insights page.
+                        </p>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="prefilterForm">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="payer" class="form-label fw-bold">
+                                        <i class="fas fa-building text-info"></i> Payer
+                                    </label>
+                                    <select class="form-select select2-dropdown" id="payer" name="payer" multiple>
+                                        {% for payer in filtered_options.payers %}
+                                            <option value="{{ payer }}" {% if payer in active_prefilters.payer %}selected{% endif %}>{{ payer }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="org_name" class="form-label fw-bold">
+                                        <i class="fas fa-hospital text-success"></i> Organization
+                                    </label>
+                                    <select class="form-select select2-dropdown" id="org_name" name="org_name" multiple>
+                                        {% for org in filtered_options.organizations %}
+                                            <option value="{{ org }}" {% if org in active_prefilters.org_name %}selected{% endif %}>{{ org }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    </div>
+                                <div class="col-md-4">
+                                    <label for="procedure_set" class="form-label fw-bold">
+                                        <i class="fas fa-procedures text-warning"></i> Procedure Set
+                                    </label>
+                                    <select class="form-select select2-dropdown" id="procedure_set" name="procedure_set" multiple>
+                                        {% for proc_set in filtered_options.procedure_sets %}
+                                            <option value="{{ proc_set }}" {% if proc_set in active_prefilters.procedure_set %}selected{% endif %}>{{ proc_set }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="primary_taxonomy_desc" class="form-label fw-bold">
+                                        <i class="fas fa-user-md text-primary"></i> Primary Taxonomy Description
+                                    </label>
+                                    <select class="form-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" multiple>
+                                        {% for taxonomy in filtered_options.primary_taxonomy_descs %}
+                                            <option value="{{ taxonomy }}" {% if taxonomy in active_prefilters.primary_taxonomy_desc %}selected{% endif %}>{{ taxonomy }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tin_value" class="form-label fw-bold">
+                                        <i class="fas fa-id-card text-secondary"></i> TIN Value
+                                    </label>
+                                    <select class="form-select select2-dropdown" id="tin_value" name="tin_value" multiple>
+                                        {% for tin in filtered_options.tin_values %}
+                                            <option value="{{ tin }}" {% if tin in active_prefilters.tin_value %}selected{% endif %}>{{ tin }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Selection Summary -->
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-info" id="selectionSummary" style="display: none;">
+                                        <h6><i class="fas fa-info-circle"></i> Filter Preview</h6>
+                                        <div id="selectionDetails"></div>
+                                        <small class="text-muted">Click "Apply Prefilters" to see the filtered data</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="fas fa-sync-alt"></i> Apply Prefilters
+                                    </button>
+                                    <a href="{% url 'commercial_rate_insights_overview' state_code %}" class="btn btn-outline-secondary me-2">
+                                        <i class="fas fa-times"></i> Clear All
+                                    </a>
+                                    <a href="{% url 'commercial_rate_insights_state' state_code %}?{% for key, value in active_prefilters.items %}{{ key }}={{ value }}{% if not forloop.last %}&{% endif %}{% endfor %}" 
+                                       class="btn btn-success me-2">
+                                        <i class="fas fa-chart-line"></i> View Insights with Prefilters
+                                    </a>
+                                    <a href="{% url 'custom_network_analysis' state_code %}?{% for key, value in active_prefilters.items %}{{ key }}={{ value }}{% if not forloop.last %}&{% endif %}{% endfor %}" 
+                                       class="btn btn-warning">
+                                        <i class="fas fa-network-wired"></i> Custom Network Analysis
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dataset Statistics -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h5 class="mb-3">
+                    <i class="fas fa-database text-primary"></i> Dataset Statistics
+                </h5>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card h-100">
+                    <div class="card-body text-center">
+                        <div class="display-6 text-primary mb-2">{{ overview_stats.summary.total_records|floatformat:0|intcomma }}</div>
+                        <h6 class="card-title">Total Records</h6>
+                        <small class="text-muted">Complete dataset size</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card h-100">
+                    <div class="card-body text-center">
+                        <div class="display-6 text-success mb-2">{{ overview_stats.summary.distinct_payers|intcomma }}</div>
+                        <h6 class="card-title">Distinct Payers</h6>
+                        <small class="text-muted">Insurance companies</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card h-100">
+                    <div class="card-body text-center">
+                        <div class="display-6 text-info mb-2">{{ overview_stats.summary.distinct_organizations|intcomma }}</div>
+                        <h6 class="card-title">Distinct Organizations</h6>
+                        <small class="text-muted">Healthcare providers</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3 mb-3">
+                <div class="card stat-card h-100">
+                    <div class="card-body text-center">
+                        <div class="display-6 text-warning mb-2">{{ overview_stats.summary.distinct_procedure_sets|intcomma }}</div>
+                        <h6 class="card-title">Procedure Sets</h6>
+                        <small class="text-muted">Medical specialties</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Coverage -->
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-chart-pie text-primary"></i> Data Coverage
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Records with Rates</span>
+                                <span class="fw-bold">{{ overview_stats.data_coverage.rate_coverage_pct }}%</span>
+                            </div>
+                            <div class="coverage-bar">
+                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.rate_coverage_pct }}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Professional Records</span>
+                                <span class="fw-bold">{{ overview_stats.data_coverage.professional_pct }}%</span>
+                            </div>
+                            <div class="coverage-bar">
+                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.professional_pct }}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Institutional Records</span>
+                                <span class="fw-bold">{{ overview_stats.data_coverage.institutional_pct }}%</span>
+                            </div>
+                            <div class="coverage-bar">
+                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.institutional_pct }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-list text-success"></i> Additional Dimensions
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="text-center mb-3">
+                                    <div class="h4 text-primary">{{ overview_stats.summary.distinct_procedure_classes|intcomma }}</div>
+                                    <small class="text-muted">Procedure Classes</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center mb-3">
+                                    <div class="h4 text-info">{{ overview_stats.summary.distinct_procedure_groups|intcomma }}</div>
+                                    <small class="text-muted">Procedure Groups</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center mb-3">
+                                    <div class="h4 text-warning">{{ overview_stats.summary.distinct_cbsa_regions|intcomma }}</div>
+                                    <small class="text-muted">CBSA Regions</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center mb-3">
+                                    <div class="h4 text-success">{{ overview_stats.summary.distinct_billing_codes|intcomma }}</div>
+                                    <small class="text-muted">Billing Codes</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Values -->
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-building text-info"></i> Top Payers
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {% for payer in overview_stats.top_payers %}
+                        <div class="top-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">{{ payer.name }}</span>
+                                <span class="badge bg-primary">{{ payer.count|intcomma }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-hospital text-success"></i> Top Organizations
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {% for org in overview_stats.top_organizations %}
+                        <div class="top-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">{{ org.name }}</span>
+                                <span class="badge bg-success">{{ org.count|intcomma }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-procedures text-warning"></i> Top Procedure Sets
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {% for proc_set in overview_stats.top_procedure_sets %}
+                        <div class="top-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">{{ proc_set.name }}</span>
+                                <span class="badge bg-warning text-dark">{{ proc_set.count|intcomma }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sample Records Preview -->
+        {% if sample_records %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-eye text-info"></i> Sample Records (with current prefilters)
+                        </h6>
+                        <small class="text-muted">Showing 5 sample records to preview the data</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Payer</th>
+                                        <th>Organization</th>
+                                        <th>Procedure Set</th>
+                                        <th>Billing Class</th>
+                                        <th>Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for record in sample_records %}
+                                    <tr>
+                                        <td>{{ record.payer }}</td>
+                                        <td>{{ record.org_name }}</td>
+                                        <td>{{ record.procedure_set }}</td>
+                                        <td>
+                                            <span class="badge {% if record.billing_class == 'professional' %}bg-info{% else %}bg-success{% endif %}">
+                                                {{ record.billing_class|title }}
+                                            </span>
+                                        </td>
+                                        <td>${{ record.rate|floatformat:2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <!-- Error State -->
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Data Not Available</h5>
+                    <p>{{ error_message }}</p>
+                    <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-danger">
+                        <i class="fas fa-arrow-left"></i> Back to Map
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Action Buttons Fixed Bottom -->
+{% if has_data %}
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1000;">
+    <div class="btn-group-vertical">
+        <a href="{% url 'commercial_rate_insights_state' state_code %}?{% for key, value in active_prefilters.items %}{{ key }}={{ value }}{% if not forloop.last %}&{% endif %}{% endfor %}" 
+           class="btn btn-success btn-lg">
+            <i class="fas fa-chart-line"></i> View Insights
+        </a>
+        <small class="text-center text-muted mt-1">With Current Prefilters</small>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize Select2 for dropdowns with multiple selection support
+    $('.select2-dropdown').select2({
+        placeholder: 'Select one or more options...',
+        allowClear: true,
+        width: '100%',
+        closeOnSelect: false
+    });
+    
+    // Update selection summary when dropdowns change (no auto-submit)
+    $('.select2-dropdown').on('change', function() {
+        updateSelectionSummary();
+    });
+    
+         function updateSelectionSummary() {
+         var selections = {};
+         var hasSelections = false;
+         
+         // Collect all selections
+         $('.select2-dropdown').each(function() {
+             var fieldName = $(this).attr('name');
+             var selectedValues = $(this).val();
+             
+             // Handle both single values and arrays
+             if (selectedValues) {
+                 if (Array.isArray(selectedValues) && selectedValues.length > 0) {
+                     selections[fieldName] = selectedValues;
+                     hasSelections = true;
+                 } else if (typeof selectedValues === 'string' && selectedValues.trim() !== '') {
+                     selections[fieldName] = [selectedValues];
+                     hasSelections = true;
+                 }
+             }
+         });
+        
+        // Show/hide summary and update content
+        if (hasSelections) {
+            var summaryHtml = '<div class="row">';
+            
+            for (var field in selections) {
+                var fieldLabel = getFieldLabel(field);
+                var values = selections[field];
+                
+                summaryHtml += '<div class="col-md-6 mb-2">';
+                summaryHtml += '<strong>' + fieldLabel + ':</strong><br>';
+                
+                values.forEach(function(value) {
+                    summaryHtml += '<span class="badge bg-primary me-1 mb-1">' + value + '</span>';
+                });
+                
+                summaryHtml += '</div>';
+            }
+            
+            summaryHtml += '</div>';
+            
+            $('#selectionDetails').html(summaryHtml);
+            $('#selectionSummary').show();
+        } else {
+            $('#selectionSummary').hide();
+        }
+    }
+    
+    function getFieldLabel(fieldName) {
+        var labels = {
+            'payer': 'Payers',
+            'org_name': 'Organizations', 
+            'procedure_set': 'Procedure Sets',
+            'primary_taxonomy_desc': 'Taxonomy Descriptions',
+            'tin_value': 'TIN Values'
+        };
+        return labels[fieldName] || fieldName;
+    }
+    
+    // Initialize summary on page load
+    updateSelectionSummary();
+});
+</script>
+{% endblock %}
