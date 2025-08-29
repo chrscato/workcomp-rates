@@ -45,7 +45,12 @@
                                     <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">
                                         <i class="bi bi-person text-primary me-2"></i>Profile
                                     </a></li>
+                                    {% if user.is_staff %}
+                                    <li><a class="dropdown-item" href="{% url 'user_activity_dashboard' %}">
+                                        <i class="bi bi-activity text-info me-2"></i>Activity Dashboard
+                                    </a></li>
                                     <li><hr class="dropdown-divider"></li>
+                                    {% endif %}
                                     <li><a class="dropdown-item" href="{% url 'accounts:logout' %}">
                                         <i class="bi bi-box-arrow-right text-danger me-2"></i>Logout
                                     </a></li>

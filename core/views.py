@@ -1,9 +1,13 @@
 import json
 import logging
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse
+from django.utils import timezone
+from datetime import timedelta
 from .utils.parquet_utils import ParquetDataManager
+from .models import UserActivity
+from django.db import models
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +319,53 @@ def commercial_rate_insights_compare(request, state_code):
         }
     
     return render(request, 'core/commercial_rate_insights_compare.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def user_activity_dashboard(request):
+    """Dashboard for viewing user activity data (staff only)."""
+    
+    # Get date range from request or default to last 7 days
+    days = int(request.GET.get('days', 7))
+    end_date = timezone.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Get activity data
+    activities = UserActivity.objects.filter(
+        timestamp__gte=start_date,
+        timestamp__lte=end_date
+    ).select_related('user').order_by('-timestamp')
+    
+    # Get summary statistics
+    total_activities = activities.count()
+    unique_users = activities.values('user').distinct().count()
+    
+    # Action breakdown
+    action_counts = activities.values('action').annotate(
+        count=models.Count('id')
+    ).order_by('-count')
+    
+    # Recent activities (last 50)
+    recent_activities = activities[:50]
+    
+    # Top active users
+    top_users = activities.values('user__username').annotate(
+        count=models.Count('id')
+    ).order_by('-count')[:10]
+    
+    context = {
+        'total_activities': total_activities,
+        'unique_users': unique_users,
+        'action_counts': action_counts,
+        'recent_activities': recent_activities,
+        'top_users': top_users,
+        'days': days,
+        'start_date': start_date,
+        'end_date': end_date,
+    }
+    
+    return render(request, 'core/user_activity_dashboard.html', context)
 
 
 

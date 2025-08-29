@@ -7,4 +7,5 @@ urlpatterns = [
     path('commercial/insights/map/', views.commercial_rate_insights_map, name='commercial_rate_insights_map'),
     path('commercial/insights/<str:state_code>/', views.commercial_rate_insights_state, name='commercial_rate_insights_state'),
     path('commercial/insights/<str:state_code>/compare/', views.commercial_rate_insights_compare, name='commercial_rate_insights_compare'),
+    path('admin/activity/', views.user_activity_dashboard, name='user_activity_dashboard'),
 ]

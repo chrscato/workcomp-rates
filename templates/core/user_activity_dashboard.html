@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}User Activity Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-activity text-primary me-2"></i>
+                    User Activity Dashboard
+                </h1>
+                
+                <!-- Date Range Filter -->
+                <div class="d-flex gap-2">
+                    <select class="form-select" id="daysFilter" onchange="filterByDays(this.value)">
+                        <option value="1" {% if days == 1 %}selected{% endif %}>Last 24 hours</option>
+                        <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                        <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                    </select>
+                    <a href="{% url 'user_activity_dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ total_activities }}</h4>
+                                    <p class="card-text">Total Activities</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-activity fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ unique_users }}</h4>
+                                    <p class="card-text">Active Users</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-people fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ days }}</h4>
+                                    <p class="card-text">Days Analyzed</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-calendar-range fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h4 class="card-title">{{ action_counts|length }}</h4>
+                                    <p class="card-text">Action Types</p>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-list-ul fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <!-- Action Breakdown -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-pie-chart text-primary me-2"></i>
+                                Action Breakdown
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Action</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for action in action_counts %}
+                                        <tr>
+                                            <td>
+                                                <span class="badge bg-primary">{{ action.action|title }}</span>
+                                            </td>
+                                            <td>{{ action.count }}</td>
+                                            <td>{{ action.count|floatformat:1 }}%</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Top Users -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-trophy text-warning me-2"></i>
+                                Top Active Users
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>User</th>
+                                            <th>Activities</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for user in top_users %}
+                                        <tr>
+                                            <td>
+                                                <i class="bi bi-person-circle me-2"></i>
+                                                {{ user.user__username }}
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-success">{{ user.count }}</span>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Activities -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history text-info me-2"></i>
+                        Recent Activities
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Page</th>
+                                    <th>Title</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in recent_activities %}
+                                <tr>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ activity.timestamp|date:"M j, Y g:i A" }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ activity.user.username }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ activity.action|title }}</span>
+                                    </td>
+                                    <td>
+                                        <code>{{ activity.page_url|truncatechars:50 }}</code>
+                                    </td>
+                                    <td>
+                                        <small>{{ activity.page_title|truncatechars:40 }}</small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        No activities found for the selected time period.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function filterByDays(days) {
+    window.location.href = `{% url 'user_activity_dashboard' %}?days=${days}`;
+}
+</script>
+{% endblock %}
