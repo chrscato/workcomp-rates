@@ -239,6 +239,27 @@
     {% block extra_js %}
     <!-- Shared filter functionality -->
     <script src="{% static 'js/shared_filters.js' %}"></script>
+    
+    <!-- Loading indicator management -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show loading indicator initially
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const mainContent = document.getElementById('mainContent');
+            
+            if (loadingIndicator && mainContent) {
+                loadingIndicator.style.display = 'block';
+                mainContent.style.display = 'none';
+                
+                // Hide loading indicator and show content after a short delay
+                // This gives the impression that data is being processed
+                setTimeout(function() {
+                    loadingIndicator.style.display = 'none';
+                    mainContent.style.display = 'block';
+                }, 500);
+            }
+        });
+    </script>
     {% endblock %}
 {% endif %}
 {% endblock %}

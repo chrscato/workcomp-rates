@@ -10,6 +10,7 @@ from .models import UserActivity
 from django.db import models
 import pandas as pd
 import io
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -88,37 +89,52 @@ def commercial_rate_insights_state(request, state_code):
         # Remove empty filters
         active_filters = {k: v for k, v in active_filters.items() if v}
         
-
+        # Create cache key based on state and filters
+        cache_key = f"ga_insights_{state_code}_{hash(str(active_filters))}"
         
-        # Get filtered options for each field based on current selections
-        filters = {
-            'payers': data_manager.get_unique_values('payer', active_filters),
-            'organizations': data_manager.get_unique_values('org_name', active_filters),
-            'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
-            'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
-            'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
-            'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
-            'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
-            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
-            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
-            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
-        }
-        
-        # Get aggregated statistics with filters
-        stats = data_manager.get_aggregated_stats(active_filters)
-        
-        # Get sample records
-        sample_records = data_manager.get_sample_records(active_filters, limit=10)
-        
-        context = {
-            'filters': filters,
-            'stats': stats,
-            'active_filters': active_filters,
-            'sample_records': sample_records,
-            'has_data': True,
-            'state_code': state_code,
-            'state_name': ParquetDataManager.get_state_name(state_code)
-        }
+        # Try to get cached data first
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info(f"Using cached data for {state_code}")
+            context = cached_data
+        else:
+            # Get filtered options for each field based on current selections
+            filters = {
+                'payers': data_manager.get_unique_values('payer', active_filters),
+                'organizations': data_manager.get_unique_values('org_name', active_filters),
+                'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
+                'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
+                'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
+                'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
+                'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+                'tin_values': data_manager.get_unique_values('tin_value', active_filters),
+                'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
+                'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
+            }
+            
+            # Get aggregated statistics with filters
+            stats = data_manager.get_aggregated_stats(active_filters)
+            
+            # Get base statistics for shared filters template
+            base_stats = data_manager.get_base_statistics(active_filters)
+            
+            # Get sample records
+            sample_records = data_manager.get_sample_records(active_filters, limit=10)
+            
+            context = {
+                'filters': filters,
+                'stats': stats,
+                'base_stats': base_stats,
+                'active_filters': active_filters,
+                'sample_records': sample_records,
+                'has_data': True,
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            
+            # Cache the data for 5 minutes
+            cache.set(cache_key, context, 300)
+            logger.info(f"Cached data for {state_code}")
         
         # Debug logging
         logger.info(f"State: {state_code}")
@@ -181,12 +197,16 @@ def commercial_rate_insights(request):
         # Get aggregated statistics with filters
         stats = data_manager.get_aggregated_stats(active_filters)
         
+        # Get base statistics for shared filters template
+        base_stats = data_manager.get_base_statistics(active_filters)
+        
         # Get sample records
         sample_records = data_manager.get_sample_records(active_filters, limit=10)
         
         context = {
             'filters': filters,
             'stats': stats,
+            'base_stats': base_stats,
             'active_filters': active_filters,
             'sample_records': sample_records,
             'has_data': True
