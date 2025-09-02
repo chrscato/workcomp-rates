@@ -235,7 +235,8 @@ class ParquetDataManager:
                     GA_OP_MAR,
                     GA_ASC_MAR,
                     medicare_opps_mar_stateavg,
-                    medicare_asc_mar_stateavg
+                    medicare_asc_mar_stateavg,
+                    primary_taxonomy_desc
                 FROM commercial_rates
                 WHERE {where_sql}
                 AND billing_class = 'institutional'
@@ -258,16 +259,21 @@ class ParquetDataManager:
                     ga_asc = float(row[2]) if row[2] else 0
                     medicare_opps = float(row[3]) if row[3] else 0
                     medicare_asc = float(row[4]) if row[4] else 0
+                    primary_taxonomy_desc = row[5] if row[5] else ''
                     
                     if rate > 0:
                         facility_rates.append(rate)
-                    if ga_op > 0:
+                    # Only include GA WCFS OP MAR calculations when taxonomy contains 'Hospital'
+                    if ga_op > 0 and 'Hospital' in primary_taxonomy_desc:
                         ga_op_mar.append(ga_op)
-                    if ga_asc > 0:
+                    # Only include GA WCFS ASC MAR calculations when taxonomy does NOT contain 'Hospital'
+                    if ga_asc > 0 and 'Hospital' not in primary_taxonomy_desc:
                         ga_asc_mar.append(ga_asc)
-                    if medicare_opps > 0:
+                    # Only include Medicare OP MAR calculations when taxonomy contains 'Hospital'
+                    if medicare_opps > 0 and 'Hospital' in primary_taxonomy_desc:
                         medicare_opps_mar.append(medicare_opps)
-                    if medicare_asc > 0:
+                    # Only include Medicare ASC MAR calculations when taxonomy does NOT contain 'Hospital'
+                    if medicare_asc > 0 and 'Hospital' not in primary_taxonomy_desc:
                         medicare_asc_mar.append(medicare_asc)
                 except (ValueError, TypeError):
                     continue
@@ -575,6 +581,62 @@ class ParquetDataManager:
                     stats['facility']['record_count'] = int(row[1])
                     stats['facility']['avg_rate'] = float(row[2]) if row[2] else 0
             
+            # Get actual GA WCFS OP MAR data with Hospital taxonomy filter
+            ga_op_query = f"""
+                SELECT 
+                    AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar_avg
+                FROM commercial_rates
+                WHERE {where_clause}
+                AND billing_class = 'institutional'
+                AND primary_taxonomy_desc LIKE '%Hospital%'
+                AND ga_op_mar IS NOT NULL
+            """
+            
+            ga_op_result = con.execute(ga_op_query).fetchone()
+            ga_op_mar_avg = float(ga_op_result[0]) if ga_op_result and ga_op_result[0] else 0
+            
+            # Get actual GA WCFS ASC MAR data excluding Hospital taxonomy
+            ga_asc_query = f"""
+                SELECT 
+                    AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar_avg
+                FROM commercial_rates
+                WHERE {where_clause}
+                AND billing_class = 'institutional'
+                AND primary_taxonomy_desc NOT LIKE '%Hospital%'
+                AND ga_asc_mar IS NOT NULL
+            """
+            
+            ga_asc_result = con.execute(ga_asc_query).fetchone()
+            ga_asc_mar_avg = float(ga_asc_result[0]) if ga_asc_result and ga_asc_result[0] else 0
+            
+            # Get actual Medicare OP MAR data with Hospital taxonomy filter
+            medicare_op_query = f"""
+                SELECT 
+                    AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar_avg
+                FROM commercial_rates
+                WHERE {where_clause}
+                AND billing_class = 'institutional'
+                AND primary_taxonomy_desc LIKE '%Hospital%'
+                AND medicare_op_mar IS NOT NULL
+            """
+            
+            medicare_op_result = con.execute(medicare_op_query).fetchone()
+            medicare_op_mar_avg = float(medicare_op_result[0]) if medicare_op_result and medicare_op_result[0] else 0
+            
+            # Get actual Medicare ASC MAR data excluding Hospital taxonomy
+            medicare_asc_query = f"""
+                SELECT 
+                    AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar_avg
+                FROM commercial_rates
+                WHERE {where_clause}
+                AND billing_class = 'institutional'
+                AND primary_taxonomy_desc NOT LIKE '%Hospital%'
+                AND medicare_asc_mar IS NOT NULL
+            """
+            
+            medicare_asc_result = con.execute(medicare_asc_query).fetchone()
+            medicare_asc_mar_avg = float(medicare_asc_result[0]) if medicare_asc_result and medicare_asc_result[0] else 0
+            
             # Calculate percentages and margins (simplified for now)
             stats['professional']['ga_prof_pct'] = 85.0  # Placeholder
             stats['professional']['medicare_prof_pct'] = 120.0  # Placeholder
@@ -585,10 +647,10 @@ class ParquetDataManager:
             stats['facility']['ga_asc_pct'] = 95.0  # Placeholder
             stats['facility']['medicare_op_pct'] = 110.0  # Placeholder
             stats['facility']['medicare_asc_pct'] = 105.0  # Placeholder
-            stats['facility']['ga_op_mar'] = 10.0  # Placeholder
-            stats['facility']['ga_asc_mar'] = 5.0  # Placeholder
-            stats['facility']['medicare_op_mar'] = 10.0  # Placeholder
-            stats['facility']['medicare_asc_mar'] = 5.0  # Placeholder
+            stats['facility']['ga_op_mar'] = ga_op_mar_avg  # Actual calculated value with Hospital filter
+            stats['facility']['ga_asc_mar'] = ga_asc_mar_avg  # Actual calculated value excluding Hospital
+            stats['facility']['medicare_op_mar'] = medicare_op_mar_avg  # Actual calculated value with Hospital filter
+            stats['facility']['medicare_asc_mar'] = medicare_asc_mar_avg  # Actual calculated value excluding Hospital
             
             return stats
             
@@ -599,8 +661,8 @@ class ParquetDataManager:
                 'facility': {'record_count': 0, 'avg_rate': 0, 'ga_op_pct': 0, 'ga_asc_pct': 0, 'medicare_op_pct': 0, 'medicare_asc_pct': 0, 'ga_op_mar': 0, 'ga_asc_mar': 0, 'medicare_op_mar': 0, 'medicare_asc_mar': 0}
             }
 
-    def get_comparison_data(self, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Get comparison data for organizations and payers."""
+    def get_comparison_data(self, filters: Dict[str, Any] = None, selected_orgs: List[str] = None, selected_payers: List[str] = None) -> List[Dict[str, Any]]:
+        """Get comparison data for selected organizations and payers."""
         try:
             con = duckdb.connect(database=':memory:')
             
@@ -614,61 +676,127 @@ class ParquetDataManager:
             # Apply filters if provided
             where_clause = self.build_where_clause(filters) if filters else "1=1"
             
-            # Get top organizations and payers for comparison
-            org_query = f"""
-                SELECT 
-                    org_name,
-                    COUNT(*) as record_count,
-                    AVG(rate) as avg_rate,
-                    COUNT(DISTINCT procedure_set) as procedure_sets,
-                    COUNT(DISTINCT payer) as payers
-                FROM commercial_rates
-                WHERE {where_clause}
-                GROUP BY org_name
-                ORDER BY record_count DESC
-                LIMIT 10
-            """
-            
-            payer_query = f"""
-                SELECT 
-                    payer,
-                    COUNT(*) as record_count,
-                    AVG(rate) as avg_rate,
-                    COUNT(DISTINCT org_name) as organizations,
-                    COUNT(DISTINCT procedure_set) as procedure_sets
-                FROM commercial_rates
-                WHERE {where_clause}
-                GROUP BY payer
-                ORDER BY record_count DESC
-                LIMIT 10
-            """
-            
-            org_results = con.execute(org_query).fetchall()
-            payer_results = con.execute(payer_query).fetchall()
-            
             comparison_data = []
             
-            # Add organizations
-            for row in org_results:
-                comparison_data.append({
-                    'name': row[0],
-                    'type': 'organization',
-                    'record_count': int(row[1]),
-                    'avg_rate': float(row[2]) if row[2] else 0,
-                    'procedure_sets': int(row[3]),
-                    'payers': int(row[4])
-                })
+            # Get data for selected organizations
+            if selected_orgs:
+                for org in selected_orgs:
+                    org_where = f"{where_clause} AND org_name = '{org}'"
+                    
+                    # Get professional rates
+                    prof_query = f"""
+                        SELECT 
+                            COUNT(*) as record_count,
+                            AVG(rate) as avg_rate,
+                            AVG(ga_prof_mar) as ga_prof_mar,
+                            AVG(medicare_prof_mar) as medicare_prof_mar
+                        FROM commercial_rates
+                        WHERE {org_where} AND procedure_class = 'Professional'
+                    """
+                    
+                    # Get facility rates
+                    fac_query = f"""
+                        SELECT 
+                            COUNT(*) as record_count,
+                            AVG(rate) as avg_rate,
+                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar,
+                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar,
+                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar,
+                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar
+                        FROM commercial_rates
+                        WHERE {org_where} AND procedure_class = 'Facility'
+                    """
+                    
+                    prof_result = con.execute(prof_query).fetchone()
+                    fac_result = con.execute(fac_query).fetchone()
+                    
+                    if prof_result or fac_result:
+                        comparison_data.append({
+                            'name': org,
+                            'type': 'organization',
+                            'stats': {
+                                'professional': {
+                                    'record_count': int(prof_result[0]) if prof_result and prof_result[0] else 0,
+                                    'avg_rate': float(prof_result[1]) if prof_result and prof_result[1] else 0,
+                                    'ga_prof_pct': float(prof_result[2]) if prof_result and prof_result[2] else 0,
+                                    'medicare_prof_pct': float(prof_result[3]) if prof_result and prof_result[3] else 0,
+                                    'ga_prof_mar': float(prof_result[2]) if prof_result and prof_result[2] else 0,
+                                    'medicare_prof_mar': float(prof_result[3]) if prof_result and prof_result[3] else 0
+                                },
+                                'facility': {
+                                    'record_count': int(fac_result[0]) if fac_result and fac_result[0] else 0,
+                                    'avg_rate': float(fac_result[1]) if fac_result and fac_result[1] else 0,
+                                    'ga_op_pct': float(fac_result[2]) if fac_result and fac_result[2] else 0,
+                                    'ga_asc_pct': float(fac_result[3]) if fac_result and fac_result[3] else 0,
+                                    'medicare_op_pct': float(fac_result[4]) if fac_result and fac_result[4] else 0,
+                                    'medicare_asc_pct': float(fac_result[5]) if fac_result and fac_result[5] else 0,
+                                    'ga_op_mar': float(fac_result[2]) if fac_result and fac_result[2] else 0,
+                                    'ga_asc_mar': float(fac_result[3]) if fac_result and fac_result[3] else 0,
+                                    'medicare_op_mar': float(fac_result[4]) if fac_result and fac_result[4] else 0,
+                                    'medicare_asc_mar': float(fac_result[5]) if fac_result and fac_result[5] else 0
+                                }
+                            }
+                        })
             
-            # Add payers
-            for row in payer_results:
-                comparison_data.append({
-                    'name': row[0],
-                    'type': 'payer',
-                    'record_count': int(row[1]),
-                    'avg_rate': float(row[2]) if row[2] else 0,
-                    'organizations': int(row[3]),
-                    'procedure_sets': int(row[4])
-                })
+            # Get data for selected payers
+            if selected_payers:
+                for payer in selected_payers:
+                    payer_where = f"{where_clause} AND payer = '{payer}'"
+                    
+                    # Get professional rates
+                    prof_query = f"""
+                        SELECT 
+                            COUNT(*) as record_count,
+                            AVG(rate) as avg_rate,
+                            AVG(ga_prof_mar) as ga_prof_mar,
+                            AVG(medicare_prof_mar) as medicare_prof_mar
+                        FROM commercial_rates
+                        WHERE {payer_where} AND procedure_class = 'Professional'
+                    """
+                    
+                    # Get facility rates
+                    fac_query = f"""
+                        SELECT 
+                            COUNT(*) as record_count,
+                            AVG(rate) as avg_rate,
+                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar,
+                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar,
+                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar,
+                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar
+                        FROM commercial_rates
+                        WHERE {payer_where} AND procedure_class = 'Facility'
+                    """
+                    
+                    prof_result = con.execute(prof_query).fetchone()
+                    fac_result = con.execute(fac_query).fetchone()
+                    
+                    if prof_result or fac_result:
+                        comparison_data.append({
+                            'name': payer,
+                            'type': 'payer',
+                            'stats': {
+                                'professional': {
+                                    'record_count': int(prof_result[0]) if prof_result and prof_result[0] else 0,
+                                    'avg_rate': float(prof_result[1]) if prof_result and prof_result[1] else 0,
+                                    'ga_prof_pct': float(prof_result[2]) if prof_result and prof_result[2] else 0,
+                                    'medicare_prof_pct': float(prof_result[3]) if prof_result and prof_result[3] else 0,
+                                    'ga_prof_mar': float(prof_result[2]) if prof_result and prof_result[2] else 0,
+                                    'medicare_prof_mar': float(prof_result[3]) if prof_result and prof_result[3] else 0
+                                },
+                                'facility': {
+                                    'record_count': int(fac_result[0]) if fac_result and fac_result[0] else 0,
+                                    'avg_rate': float(fac_result[1]) if fac_result and fac_result[1] else 0,
+                                    'ga_op_pct': float(fac_result[2]) if fac_result and fac_result[2] else 0,
+                                    'ga_asc_pct': float(fac_result[3]) if fac_result and fac_result[3] else 0,
+                                    'medicare_op_pct': float(fac_result[4]) if fac_result and fac_result[4] else 0,
+                                    'medicare_asc_pct': float(fac_result[5]) if fac_result and fac_result[5] else 0,
+                                    'ga_op_mar': float(fac_result[2]) if fac_result and fac_result[2] else 0,
+                                    'ga_asc_mar': float(fac_result[3]) if fac_result and fac_result[3] else 0,
+                                    'medicare_op_mar': float(fac_result[4]) if fac_result and fac_result[4] else 0,
+                                    'medicare_asc_mar': float(fac_result[5]) if fac_result and fac_result[5] else 0
+                                }
+                            }
+                        })
             
             return comparison_data
             

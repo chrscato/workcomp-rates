@@ -133,7 +133,7 @@
                         <h5 class="mb-0">Select Entities to Compare</h5>
                         <p class="text-muted mb-0">Choose up to 4 organizations and/or payers to compare side by side</p>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body comparison-selection">
                         <form method="get" id="compareForm">
                             <!-- Preserve existing filters -->
                             <input type="hidden" name="payer" value="{{ active_filters.payer|default:'' }}">
@@ -149,56 +149,38 @@
                             
                             <!-- Organization Selection -->
                             <div class="row mb-3">
-                                <div class="col-12">
-                                    <h6>Organizations ({{ filters.organizations|length }} available)</h6>
-                                    {% if filters.organizations %}
-                                    <div class="row">
+                                <div class="col-md-6">
+                                    <label for="compare_orgs" class="form-label fw-bold">
+                                        <i class="fas fa-hospital text-success"></i> Organizations to Compare
+                                    </label>
+                                    <select class="form-select filter-select select2-dropdown" id="compare_orgs" name="compare_orgs" multiple>
                                         {% for org in filters.organizations %}
-                                        <div class="col-md-3 mb-2">
-                                            <div class="form-check">
-                                                <input class="form-check-input org-checkbox" type="checkbox" name="compare_orgs[]" value="{{ org }}" id="compare_org_{{ forloop.counter }}"
-                                                       {% if org in compare_orgs_selected %}checked{% endif %}>
-                                                <label class="form-check-label" for="compare_org_{{ forloop.counter }}">
-                                                    {{ org }}
-                                                </label>
-                                            </div>
-                                        </div>
+                                            <option value="{{ org }}" {% if org in compare_orgs_selected %}selected{% endif %}>{{ org }}</option>
                                         {% endfor %}
-                                    </div>
-                                    {% else %}
-                                    <p class="text-muted">No organizations available for comparison.</p>
-                                    {% endif %}
+                                    </select>
+                                    <small class="text-muted">Select up to 4 organizations to compare</small>
                                 </div>
-                            </div>
-
-                            <!-- Payer Selection -->
-                            <div class="row mb-3">
-                                <div class="col-12">
-                                    <h6>Payers ({{ filters.payers|length }} available)</h6>
-                                    {% if filters.payers %}
-                                    <div class="row">
+                                <div class="col-md-6">
+                                    <label for="compare_payers" class="form-label fw-bold">
+                                        <i class="fas fa-building text-info"></i> Payers to Compare
+                                    </label>
+                                    <select class="form-select filter-select select2-dropdown" id="compare_payers" name="compare_payers" multiple>
                                         {% for payer in filters.payers %}
-                                        <div class="col-md-3 mb-2">
-                                            <div class="form-check">
-                                                <input class="form-check-input payer-checkbox" type="checkbox" name="compare_payers[]" value="{{ payer }}" id="compare_payer_{{ forloop.counter }}"
-                                                       {% if payer in compare_payers_selected %}checked{% endif %}>
-                                                <label class="form-check-label" for="compare_payer_{{ forloop.counter }}">
-                                                    {{ payer }}
-                                                </label>
-                                            </div>
-                                        </div>
+                                            <option value="{{ payer }}" {% if payer in compare_payers_selected %}selected{% endif %}>{{ payer }}</option>
                                         {% endfor %}
-                                    </div>
-                                    {% else %}
-                                    <p class="text-muted">No payers available for comparison.</p>
-                                    {% endif %}
+                                    </select>
+                                    <small class="text-muted">Select up to 4 payers to compare</small>
                                 </div>
                             </div>
 
                             <div class="row">
                                 <div class="col-12">
-                                    <button type="submit" class="btn btn-primary">Compare Selected</button>
-                                    <button type="button" class="btn btn-outline-secondary" onclick="clearCompareSelections()">Clear All</button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-chart-bar"></i> Compare Selected
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="clearCompareSelections()">
+                                        <i class="fas fa-times"></i> Clear All
+                                    </button>
                                 </div>
                             </div>
                         </form>
@@ -573,6 +555,50 @@
             font-size: 0.8rem;
             padding: 0.25rem 0.5rem;
         }
+        
+        /* Comparison section styles */
+        .comparison-selection {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+        
+        .comparison-selection .form-label {
+            color: #495057;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .comparison-selection .form-label i {
+            margin-right: 0.5rem;
+            width: 16px;
+            font-size: 0.9rem;
+        }
+        
+        .comparison-selection .text-muted {
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+        
+        .comparison-selection .btn {
+            border-radius: 6px;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .comparison-selection .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        .comparison-selection .btn i {
+            margin-right: 0.5rem;
+        }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -612,58 +638,76 @@
                 });
             });
 
-            // Handle Select2 change events
-            $('.select2-dropdown').on('select2:select select2:unselect', function() {
+            // Handle Select2 change events for filters (not comparison dropdowns)
+            $('.filter-select.select2-dropdown').on('select2:select select2:unselect', function() {
                 submitForm();
             });
 
             // Comparison Logic
-            const orgCheckboxes = document.querySelectorAll('.org-checkbox');
-            const payerCheckboxes = document.querySelectorAll('.payer-checkbox');
+            const compareOrgsSelect = document.getElementById('compare_orgs');
+            const comparePayersSelect = document.getElementById('compare_payers');
             const maxSelections = 4;
 
-            function updateCheckboxStates() {
-                const checkedOrgs = document.querySelectorAll('.org-checkbox:checked').length;
-                const checkedPayers = document.querySelectorAll('.payer-checkbox:checked').length;
-                const totalChecked = checkedOrgs + checkedPayers;
+            function updateComparisonSelections() {
+                const selectedOrgs = $(compareOrgsSelect).val() || [];
+                const selectedPayers = $(comparePayersSelect).val() || [];
+                const totalSelected = selectedOrgs.length + selectedPayers.length;
                 
-                // Disable unchecked checkboxes if max selections reached
-                if (totalChecked >= maxSelections) {
-                    orgCheckboxes.forEach(cb => {
-                        if (!cb.checked) cb.disabled = true;
-                    });
-                    payerCheckboxes.forEach(cb => {
-                        if (!cb.checked) cb.disabled = true;
-                    });
-                } else {
-                    // Enable all checkboxes
-                    orgCheckboxes.forEach(cb => cb.disabled = false);
-                    payerCheckboxes.forEach(cb => cb.disabled = false);
+                // Update the clear button state
+                const clearButton = document.querySelector('button[onclick="clearCompareSelections()"]');
+                if (clearButton) {
+                    clearButton.disabled = totalSelected === 0;
                 }
             }
 
-            // Add event listeners to checkboxes
-            orgCheckboxes.forEach(cb => {
-                cb.addEventListener('change', updateCheckboxStates);
+            // Add event listeners to comparison dropdowns
+            $(compareOrgsSelect).on('select2:select select2:unselect', function() {
+                updateComparisonSelections();
             });
             
-            payerCheckboxes.forEach(cb => {
-                cb.addEventListener('change', updateCheckboxStates);
+            $(comparePayersSelect).on('select2:select select2:unselect', function() {
+                updateComparisonSelections();
             });
 
-            // Initialize checkbox states
-            updateCheckboxStates();
+            // Initialize comparison selections
+            updateComparisonSelections();
+
+            // Handle comparison form submission
+            const compareForm = document.getElementById('compareForm');
+            if (compareForm) {
+                compareForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const selectedOrgs = $(compareOrgsSelect).val() || [];
+                    const selectedPayers = $(comparePayersSelect).val() || [];
+                    
+                    if (selectedOrgs.length === 0 && selectedPayers.length === 0) {
+                        alert('Please select at least one organization or payer to compare.');
+                        return;
+                    }
+                    
+                    // Build URL with current filters and comparison selections
+                    const currentUrl = new URL(window.location);
+                    const params = new URLSearchParams(currentUrl.search);
+                    
+                    // Clear previous comparison selections
+                    params.delete('compare_orgs');
+                    params.delete('compare_payers');
+                    
+                    // Add new comparison selections
+                    selectedOrgs.forEach(org => params.append('compare_orgs', org));
+                    selectedPayers.forEach(payer => params.append('compare_payers', payer));
+                    
+                    // Navigate to the new URL
+                    window.location.href = `${currentUrl.pathname}?${params.toString()}`;
+                });
+            }
 
             // Clear compare selections function
             window.clearCompareSelections = function() {
-                orgCheckboxes.forEach(cb => {
-                    cb.checked = false;
-                    cb.disabled = false;
-                });
-                payerCheckboxes.forEach(cb => {
-                    cb.checked = false;
-                    cb.disabled = false;
-                });
+                $(compareOrgsSelect).val(null).trigger('change');
+                $(comparePayersSelect).val(null).trigger('change');
+                updateComparisonSelections();
             };
 
             // Initialize active filters display
