@@ -79,6 +79,68 @@
     .preload-indicator .spinner-border-sm {
         margin-right: 8px;
     }
+    
+    /* Instructions button styles */
+    .instructions-btn {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
+    }
+    .instructions-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+    }
+    
+    /* Loading tips styles */
+    .loading-tips {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+    .loading-tip {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 12px;
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .loading-tip:last-child {
+        margin-bottom: 0;
+    }
+    .loading-tip-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        margin-right: 15px;
+        flex-shrink: 0;
+    }
+    .loading-tip-content h6 {
+        margin: 0 0 5px 0;
+        color: #495057;
+        font-weight: 600;
+    }
+    .loading-tip-content p {
+        margin: 0;
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
 </style>
 {% endblock %}
 
@@ -94,7 +156,10 @@
                             <h4 class="mb-0">{{ state_name }} Data Overview</h4>
                             <p class="text-muted mb-0">State Code: {{ state_code }} • Dataset Statistics</p>
                         </div>
-                        <div>
+                        <div class="d-flex gap-2">
+                            <button class="btn instructions-btn" data-bs-toggle="modal" data-bs-target="#instructionsModal">
+                                <i class="fas fa-info-circle me-2"></i>Instructions/Data Info
+                            </button>
                             <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-secondary">
                                 <i class="fas fa-map"></i> Back to Map
                             </a>
@@ -119,6 +184,89 @@
                             <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                             <i class="fas fa-arrow-right me-2"></i>Proceed to Insights
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Tips Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="loading-tips">
+                    <h5 class="mb-3 text-center">
+                        <i class="fas fa-lightbulb text-warning"></i> 
+                        Pro Tips for Better Insights
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="loading-tip">
+                                <div class="loading-tip-icon">
+                                    <i class="fas fa-filter"></i>
+                                </div>
+                                <div class="loading-tip-content">
+                                    <h6>Filter by Procedure Class</h6>
+                                    <p>Start with broad procedure classes like 'Surgery' or 'Medicine' to get focused results</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="loading-tip">
+                                <div class="loading-tip-icon">
+                                    <i class="fas fa-layer-group"></i>
+                                </div>
+                                <div class="loading-tip-content">
+                                    <h6>Use Procedure Groups</h6>
+                                    <p>Drill down into specific procedure groups for more targeted analysis</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="loading-tip">
+                                <div class="loading-tip-icon">
+                                    <i class="fas fa-chart-bar"></i>
+                                </div>
+                                <div class="loading-tip-content">
+                                    <h6>Minimum Rate Thresholds</h6>
+                                    <p>Filter by rates over $100+ to focus on higher-value procedures</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="loading-tip">
+                                <div class="loading-tip-icon">
+                                    <i class="fas fa-building"></i>
+                                </div>
+                                <div class="loading-tip-content">
+                                    <h6>Top Organizations</h6>
+                                    <p>Focus on major healthcare systems and top-performing organizations</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="loading-tip">
+                                <div class="loading-tip-icon">
+                                    <i class="fas fa-hospital-user"></i>
+                                </div>
+                                <div class="loading-tip-content">
+                                    <h6>Billing Class Differences</h6>
+                                    <p><strong>Professional:</strong> Physician services • <strong>Facility:</strong> Hospital inpatient/outpatient • <strong>Facility OP:</strong> Outpatient procedures • <strong>Facility ASC:</strong> Ambulatory surgery centers</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="loading-tip">
+                                <div class="loading-tip-icon">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </div>
+                                <div class="loading-tip-content">
+                                    <h6>Geographic Insights</h6>
+                                    <p>Use CBSA regions to compare metropolitan vs. rural areas and identify regional variations</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -381,6 +529,103 @@
     {% endif %}
 </div>
 
+<!-- Instructions Modal -->
+<div class="modal fade" id="instructionsModal" tabindex="-1" aria-labelledby="instructionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="instructionsModalLabel">
+                    <i class="fas fa-info-circle text-primary me-2"></i>
+                    Instructions & Data Information
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-3">
+                            <i class="fas fa-filter me-2"></i>Filtering Strategy
+                        </h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <strong>Start Broad:</strong> Begin with procedure class filters
+                            </li>
+                            <li class="mb-2">
+                                <strong>Drill Down:</strong> Use procedure groups for specificity
+                            </li>
+                            <li class="mb-2">
+                                <strong>Rate Thresholds:</strong> Filter by minimum rates for quality data
+                            </li>
+                            <li class="mb-2">
+                                <strong>Top Payers:</strong> Focus on major insurance companies
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-success mb-3">
+                            <i class="fas fa-hospital me-2"></i>Billing Class Types
+                        </h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <strong>Professional:</strong> Physician services, office visits
+                            </li>
+                            <li class="mb-2">
+                                <strong>Facility:</strong> Hospital inpatient/outpatient
+                            </li>
+                            <li class="mb-2">
+                                <strong>Facility OP:</strong> Outpatient procedures
+                            </li>
+                            <li class="mb-2">
+                                <strong>Facility ASC:</strong> Ambulatory surgery centers
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+                
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="text-info mb-3">
+                            <i class="fas fa-chart-line me-2"></i>Data Quality Tips
+                        </h6>
+                        <div class="alert alert-info">
+                            <ul class="mb-0">
+                                <li>Filter by rates over $100 to focus on significant procedures</li>
+                                <li>Use CBSA regions to compare metropolitan vs. rural areas</li>
+                                <li>Combine payer and organization filters for targeted analysis</li>
+                                <li>Check taxonomy descriptions for specialty-specific insights</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-12">
+                        <h6 class="text-warning mb-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Important Notes
+                        </h6>
+                        <div class="alert alert-warning">
+                            <ul class="mb-0">
+                                <li>Rates may vary significantly by geographic region</li>
+                                <li>Professional rates are typically lower than facility rates</li>
+                                <li>ASC rates often provide cost-effective alternatives</li>
+                                <li>Data coverage varies by state and procedure type</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" class="btn btn-primary" onclick="document.getElementById('proceedButton').click(); return false;">
+                    <i class="fas fa-arrow-right me-2"></i>Proceed to Insights
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Preload Indicator -->
 <div id="preloadIndicator" class="preload-indicator hidden">
     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -417,7 +662,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     function showSkeletonScreen() {
-        // Create and show skeleton loading screen
+        // Create and show enhanced loading screen with progress indicators
         const skeleton = document.createElement('div');
         skeleton.id = 'skeletonOverlay';
         skeleton.style.cssText = `
@@ -426,215 +671,283 @@ document.addEventListener('DOMContentLoaded', function() {
             left: 0;
             width: 100%;
             height: 100%;
-            background: #f8f9fa;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             z-index: 9999;
             overflow-y: auto;
         `;
         
-        // Add skeleton content
+        // Add enhanced loading content with progress indicators and tips
         skeleton.innerHTML = `
             <div class="skeleton-container">
+                <!-- Progress Bar -->
                 <div class="progress-bar">
                     <div class="progress-fill"></div>
                 </div>
                 
+                <!-- Loading Header -->
                 <div class="skeleton-header">
-                    <div class="skeleton-title"></div>
-                    <div class="skeleton-subtitle"></div>
-                </div>
-                
-                <div class="skeleton-filters">
-                    <div class="skeleton-filter-row">
-                        <div class="skeleton-filter"></div>
-                        <div class="skeleton-filter"></div>
-                        <div class="skeleton-filter"></div>
-                    </div>
-                    <div class="skeleton-filter-row">
-                        <div class="skeleton-filter"></div>
-                        <div class="skeleton-filter"></div>
-                        <div class="skeleton-filter"></div>
+                    <div class="text-center mb-4">
+                        <div class="loading-logo mb-3">
+                            <i class="fas fa-chart-line fa-3x text-primary"></i>
+                        </div>
+                        <h2 class="text-primary mb-2">Loading {{ state_name }} Insights</h2>
+                        <p class="text-muted">Preparing interactive visualizations and analytics...</p>
                     </div>
                 </div>
                 
-                <div class="skeleton-stats">
-                    <div class="skeleton-stat">
-                        <div class="skeleton-stat-value"></div>
-                        <div class="skeleton-stat-label"></div>
+                <!-- Progress Steps -->
+                <div class="progress-steps mb-4">
+                    <div class="step active" id="step1">
+                        <div class="step-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="step-content">
+                            <h6>Loading Data</h6>
+                            <p>Accessing {{ state_name }} commercial rates database</p>
+                        </div>
                     </div>
-                    <div class="skeleton-stat">
-                        <div class="skeleton-stat-value"></div>
-                        <div class="skeleton-stat-label"></div>
+                    <div class="step" id="step2">
+                        <div class="step-icon">
+                            <i class="fas fa-filter"></i>
+                        </div>
+                        <div class="step-content">
+                            <h6>Preparing Filters</h6>
+                            <p>Setting up procedure classes, groups, and billing codes</p>
+                        </div>
                     </div>
-                    <div class="skeleton-stat">
-                        <div class="skeleton-stat-value"></div>
-                        <div class="skeleton-stat-label"></div>
+                    <div class="step" id="step3">
+                        <div class="step-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div class="step-content">
+                            <h6>Building Charts</h6>
+                            <p>Creating interactive visualizations and analytics</p>
+                        </div>
                     </div>
-                    <div class="skeleton-stat">
-                        <div class="skeleton-stat-value"></div>
-                        <div class="skeleton-stat-label"></div>
+                    <div class="step" id="step4">
+                        <div class="step-icon">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                        <div class="step-content">
+                            <h6>Ready!</h6>
+                            <p>Your insights dashboard is ready to explore</p>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="skeleton-charts">
-                    <div class="skeleton-chart">
-                        <div class="skeleton-chart-title"></div>
-                        <div class="skeleton-chart-content"></div>
+                <!-- Loading Tips -->
+                <div class="loading-tips-container mb-4">
+                    <h5 class="text-center mb-3">
+                        <i class="fas fa-lightbulb text-warning"></i> 
+                        While You Wait - Pro Tips
+                    </h5>
+                    <div class="tips-carousel">
+                        <div class="tip active" id="tip1">
+                            <div class="tip-content">
+                                <h6><i class="fas fa-filter text-primary me-2"></i>Start with Procedure Class</h6>
+                                <p>Begin filtering with broad categories like 'Surgery' or 'Medicine' to get focused results</p>
+                            </div>
+                        </div>
+                        <div class="tip" id="tip2">
+                            <div class="tip-content">
+                                <h6><i class="fas fa-layer-group text-success me-2"></i>Drill Down with Groups</h6>
+                                <p>Use procedure groups for more targeted analysis after selecting a class</p>
+                            </div>
+                        </div>
+                        <div class="tip" id="tip3">
+                            <div class="tip-content">
+                                <h6><i class="fas fa-dollar-sign text-warning me-2"></i>Set Rate Thresholds</h6>
+                                <p>Filter by rates over $100+ to focus on significant procedures</p>
+                            </div>
+                        </div>
+                        <div class="tip" id="tip4">
+                            <div class="tip-content">
+                                <h6><i class="fas fa-hospital text-info me-2"></i>Compare Billing Classes</h6>
+                                <p>Professional rates are typically lower than facility rates. ASC rates often provide cost-effective alternatives.</p>
+                            </div>
+                        </div>
+                        <div class="tip" id="tip5">
+                            <div class="tip-content">
+                                <h6><i class="fas fa-map-marker-alt text-success me-2"></i>Geographic Insights</h6>
+                                <p>Use CBSA regions to compare metropolitan vs. rural areas and identify regional variations</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="skeleton-chart">
-                        <div class="skeleton-chart-title"></div>
-                        <div class="skeleton-chart-content"></div>
+                    <div class="tips-nav text-center mt-3">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTip(1)">1</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTip(2)">2</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTip(3)">3</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTip(4)">4</button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTip(5)">5</button>
                     </div>
                 </div>
                 
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
+                <!-- Loading Spinner -->
+                <div class="loading-spinner text-center">
+                    <div class="spinner mb-3"></div>
+                    <p class="text-muted">Preparing your insights experience...</p>
                 </div>
             </div>
         `;
         
-        // Add skeleton styles
+        // Add enhanced skeleton styles
         const skeletonStyles = document.createElement('style');
         skeletonStyles.textContent = `
             .skeleton-container {
-                max-width: 1200px;
+                max-width: 1000px;
                 margin: 0 auto;
                 padding: 20px;
             }
             
             .skeleton-header {
                 background: white;
-                border-radius: 8px;
-                padding: 20px;
+                border-radius: 12px;
+                padding: 30px;
                 margin-bottom: 20px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            
-            .skeleton-title {
-                height: 32px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 4px;
-                margin-bottom: 10px;
-                animation: shimmer 1.5s infinite;
-            }
-            
-            .skeleton-subtitle {
-                height: 16px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 4px;
-                width: 60%;
-                animation: shimmer 1.5s infinite;
-            }
-            
-            .skeleton-filters {
-                background: white;
-                border-radius: 8px;
-                padding: 20px;
-                margin-bottom: 20px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            
-            .skeleton-filter-row {
-                display: flex;
-                gap: 20px;
-                margin-bottom: 15px;
-            }
-            
-            .skeleton-filter {
-                height: 40px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 6px;
-                flex: 1;
-                animation: shimmer 1.5s infinite;
-            }
-            
-            .skeleton-charts {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                gap: 20px;
-                margin-bottom: 20px;
-            }
-            
-            .skeleton-chart {
-                background: white;
-                border-radius: 8px;
-                padding: 20px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            
-            .skeleton-chart-title {
-                height: 24px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 4px;
-                margin-bottom: 15px;
-                width: 70%;
-                animation: shimmer 1.5s infinite;
-            }
-            
-            .skeleton-chart-content {
-                height: 200px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 6px;
-                animation: shimmer 1.5s infinite;
-            }
-            
-            .skeleton-stats {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 20px;
-                margin-bottom: 20px;
-            }
-            
-            .skeleton-stat {
-                background: white;
-                border-radius: 8px;
-                padding: 20px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
                 text-align: center;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             
-            .skeleton-stat-value {
-                height: 48px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 6px;
-                margin-bottom: 10px;
-                animation: shimmer 1.5s infinite;
+            .loading-logo {
+                animation: pulse 2s infinite;
             }
             
-            .skeleton-stat-label {
-                height: 16px;
-                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-                background-size: 200% 100%;
-                border-radius: 4px;
-                width: 80%;
-                margin: 0 auto;
-                animation: shimmer 1.5s infinite;
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+                100% { transform: scale(1); }
+            }
+            
+            .progress-steps {
+                background: white;
+                border-radius: 12px;
+                padding: 25px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            }
+            
+            .step {
+                display: flex;
+                align-items: center;
+                margin-bottom: 20px;
+                padding: 15px;
+                border-radius: 8px;
+                transition: all 0.3s ease;
+                opacity: 0.5;
+            }
+            
+            .step.active {
+                opacity: 1;
+                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+                border-left: 4px solid #2196f3;
+            }
+            
+            .step.completed {
+                opacity: 0.8;
+                background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+                border-left: 4px solid #4caf50;
+            }
+            
+            .step-icon {
+                width: 50px;
+                height: 50px;
+                background: linear-gradient(135deg, #2196f3, #1976d2);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                margin-right: 20px;
+                flex-shrink: 0;
+            }
+            
+            .step.completed .step-icon {
+                background: linear-gradient(135deg, #4caf50, #388e3c);
+            }
+            
+            .step-content h6 {
+                margin: 0 0 5px 0;
+                color: #1976d2;
+                font-weight: 600;
+            }
+            
+            .step-content p {
+                margin: 0;
+                color: #666;
+                font-size: 0.9rem;
+            }
+            
+            .loading-tips-container {
+                background: white;
+                border-radius: 12px;
+                padding: 25px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            }
+            
+            .tips-carousel {
+                position: relative;
+                min-height: 120px;
+            }
+            
+            .tip {
+                display: none;
+                padding: 20px;
+                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                border-radius: 8px;
+                border-left: 4px solid #007bff;
+            }
+            
+            .tip.active {
+                display: block;
+                animation: fadeIn 0.5s ease-in;
+            }
+            
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            
+            .tip-content h6 {
+                margin: 0 0 10px 0;
+                color: #495057;
+                font-weight: 600;
+            }
+            
+            .tip-content p {
+                margin: 0;
+                color: #6c757d;
+                font-size: 0.9rem;
+                line-height: 1.5;
+            }
+            
+            .tips-nav button {
+                margin: 0 5px;
+                width: 35px;
+                height: 35px;
+                border-radius: 50%;
+                padding: 0;
+            }
+            
+            .tips-nav button.active {
+                background: #007bff;
+                color: white;
+                border-color: #007bff;
             }
             
             .loading-spinner {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 40px;
+                background: white;
+                border-radius: 12px;
+                padding: 30px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
             }
             
             .spinner {
-                width: 40px;
-                height: 40px;
-                border: 4px solid #f3f3f3;
-                border-top: 4px solid #007bff;
+                width: 50px;
+                height: 50px;
+                border: 5px solid #f3f3f3;
+                border-top: 5px solid #007bff;
                 border-radius: 50%;
                 animation: spin 1s linear infinite;
-            }
-            
-            @keyframes shimmer {
-                0% { background-position: -200% 0; }
-                100% { background-position: 200% 0; }
+                margin: 0 auto;
             }
             
             @keyframes spin {
@@ -644,24 +957,30 @@ document.addEventListener('DOMContentLoaded', function() {
             
             .progress-bar {
                 width: 100%;
-                height: 4px;
+                height: 6px;
                 background: #e9ecef;
-                border-radius: 2px;
+                border-radius: 3px;
                 overflow: hidden;
                 margin-bottom: 20px;
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             
             .progress-fill {
                 height: 100%;
-                background: linear-gradient(90deg, #007bff, #0056b3);
-                border-radius: 2px;
-                transition: width 0.3s ease;
-                animation: progress 2s ease-in-out infinite;
+                background: linear-gradient(90deg, #007bff, #0056b3, #28a745);
+                border-radius: 3px;
+                transition: width 0.5s ease;
+                animation: progress 3s ease-in-out infinite;
             }
             
             @keyframes progress {
                 0% { width: 0%; }
-                50% { width: 70%; }
+                25% { width: 30%; }
+                50% { width: 60%; }
+                75% { width: 85%; }
                 100% { width: 100%; }
             }
         `;
@@ -669,17 +988,83 @@ document.addEventListener('DOMContentLoaded', function() {
         document.head.appendChild(skeletonStyles);
         document.body.appendChild(skeleton);
         
-        // Animate progress bar
-        const progressFill = skeleton.querySelector('.progress-fill');
+        // Start progress animation
+        startProgressAnimation();
+        
+        // Start step progression
+        startStepProgression();
+        
+        // Start tips rotation
+        startTipsRotation();
+    }
+    
+    function startProgressAnimation() {
+        const progressFill = document.querySelector('.progress-fill');
         let progress = 0;
         const progressInterval = setInterval(() => {
-            progress += Math.random() * 15;
+            progress += Math.random() * 8 + 2;
             if (progress >= 100) {
                 progress = 100;
                 clearInterval(progressInterval);
             }
             progressFill.style.width = progress + '%';
-        }, 100);
+        }, 200);
+    }
+    
+    function startStepProgression() {
+        const steps = ['step1', 'step2', 'step3', 'step4'];
+        let currentStep = 0;
+        
+        const stepInterval = setInterval(() => {
+            if (currentStep > 0) {
+                document.getElementById(steps[currentStep - 1]).classList.add('completed');
+                document.getElementById(steps[currentStep - 1]).classList.remove('active');
+            }
+            
+            if (currentStep < steps.length) {
+                document.getElementById(steps[currentStep]).classList.add('active');
+            }
+            
+            currentStep++;
+            
+            if (currentStep >= steps.length) {
+                clearInterval(stepInterval);
+            }
+        }, 1500);
+    }
+    
+    function startTipsRotation() {
+        const tips = ['tip1', 'tip2', 'tip3', 'tip4', 'tip5'];
+        let currentTip = 0;
+        
+        const tipInterval = setInterval(() => {
+            tips.forEach(tip => {
+                document.getElementById(tip).classList.remove('active');
+            });
+            
+            document.getElementById(tips[currentTip]).classList.add('active');
+            
+            // Update nav buttons
+            document.querySelectorAll('.tips-nav button').forEach((btn, index) => {
+                btn.classList.toggle('active', index === currentTip);
+            });
+            
+            currentTip = (currentTip + 1) % tips.length;
+        }, 4000);
+    }
+    
+    function showTip(tipNumber) {
+        const tips = ['tip1', 'tip2', 'tip3', 'tip4', 'tip5'];
+        tips.forEach(tip => {
+            document.getElementById(tip).classList.remove('active');
+        });
+        
+        document.getElementById(tips[tipNumber - 1]).classList.add('active');
+        
+        // Update nav buttons
+        document.querySelectorAll('.tips-nav button').forEach((btn, index) => {
+            btn.classList.toggle('active', index === tipNumber - 1);
+        });
     }
     
     function startBackgroundPreloading() {

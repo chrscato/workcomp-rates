@@ -9,6 +9,25 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <!-- Plotly for data visualization -->
 <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+
+<style>
+    /* Instructions button styles */
+    .instructions-btn {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
+    }
+    .instructions-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+        background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -20,9 +39,14 @@
                 <div class="card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">Commercial Rate Insights</h4>
-                        <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-primary">
-                            <i class="fas fa-map"></i> Select State for Comparison
-                        </a>
+                        <div class="d-flex gap-2">
+                            <button class="btn instructions-btn" data-bs-toggle="modal" data-bs-target="#instructionsModal">
+                                <i class="fas fa-info-circle me-2"></i>Instructions/Data Info
+                            </button>
+                            <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-primary">
+                                <i class="fas fa-map"></i> Select State for Comparison
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -663,5 +687,99 @@
         }
     </script>
     {% endblock %}
+
+    <!-- Instructions Modal -->
+    <div class="modal fade" id="instructionsModal" tabindex="-1" aria-labelledby="instructionsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="instructionsModalLabel">
+                        <i class="fas fa-info-circle text-primary me-2"></i>
+                        Instructions & Data Information
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-filter me-2"></i>Filtering Strategy
+                            </h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <strong>Start Broad:</strong> Begin with procedure class filters
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Drill Down:</strong> Use procedure groups for specificity
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Rate Thresholds:</strong> Filter by minimum rates for quality data
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Top Payers:</strong> Focus on major insurance companies
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-success mb-3">
+                                <i class="fas fa-hospital me-2"></i>Billing Class Types
+                            </h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <strong>Professional:</strong> Physician services, office visits
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Facility:</strong> Hospital inpatient/outpatient
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Facility OP:</strong> Outpatient procedures
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Facility ASC:</strong> Ambulatory surgery centers
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="text-info mb-3">
+                                <i class="fas fa-chart-line me-2"></i>Data Quality Tips
+                            </h6>
+                            <div class="alert alert-info">
+                                <ul class="mb-0">
+                                    <li>Filter by rates over $100 to focus on significant procedures</li>
+                                    <li>Use CBSA regions to compare metropolitan vs. rural areas</li>
+                                    <li>Combine payer and organization filters for targeted analysis</li>
+                                    <li>Check taxonomy descriptions for specialty-specific insights</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="text-warning mb-3">
+                                <i class="fas fa-exclamation-triangle me-2"></i>Important Notes
+                            </h6>
+                            <div class="alert alert-warning">
+                                <ul class="mb-0">
+                                    <li>Rates may vary significantly by geographic region</li>
+                                    <li>Professional rates are typically lower than facility rates</li>
+                                    <li>ASC rates often provide cost-effective alternatives</li>
+                                    <li>Data coverage varies by state and procedure type</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endif %}
 {% endblock %}
