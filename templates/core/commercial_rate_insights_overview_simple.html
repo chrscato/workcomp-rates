@@ -58,27 +58,7 @@
     .proceed-button .spinner-border {
         display: none;
     }
-    .preload-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(40, 167, 69, 0.9);
-        color: white;
-        padding: 10px 15px;
-        border-radius: 25px;
-        font-size: 0.9rem;
-        z-index: 1000;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        transition: all 0.3s ease;
-    }
-    .preload-indicator.hidden {
-        opacity: 0;
-        transform: translateY(20px);
-        pointer-events: none;
-    }
-    .preload-indicator .spinner-border-sm {
-        margin-right: 8px;
-    }
+    /* Preload indicator styles removed for simplicity */
     
     /* Instructions button styles */
     .instructions-btn {
@@ -284,7 +264,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-primary mb-2">{{ overview_stats.summary.total_records|floatformat:0|intcomma }}</div>
+                        <div class="display-6 text-primary mb-2">{{ overview_stats.summary.total_records|default:0|floatformat:0|intcomma }}</div>
                         <h6 class="card-title">Total Records</h6>
                         <small class="text-muted">Complete dataset size</small>
                     </div>
@@ -294,7 +274,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-success mb-2">{{ overview_stats.summary.distinct_payers|intcomma }}</div>
+                        <div class="display-6 text-success mb-2">{{ overview_stats.summary.distinct_payers|default:0|intcomma }}</div>
                         <h6 class="card-title">Distinct Payers</h6>
                         <small class="text-muted">Insurance companies</small>
                     </div>
@@ -304,7 +284,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-info mb-2">{{ overview_stats.summary.distinct_organizations|intcomma }}</div>
+                        <div class="display-6 text-info mb-2">{{ overview_stats.summary.distinct_organizations|default:0|intcomma }}</div>
                         <h6 class="card-title">Distinct Organizations</h6>
                         <small class="text-muted">Healthcare providers</small>
                     </div>
@@ -314,7 +294,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-warning mb-2">{{ overview_stats.summary.distinct_procedure_sets|intcomma }}</div>
+                        <div class="display-6 text-warning mb-2">{{ overview_stats.summary.distinct_procedure_sets|default:0|intcomma }}</div>
                         <h6 class="card-title">Procedure Sets</h6>
                         <small class="text-muted">Medical specialties</small>
                     </div>
@@ -335,10 +315,10 @@
                         <div class="mb-3">
                             <div class="d-flex justify-content-between mb-1">
                                 <span>Records with Rates</span>
-                                <span class="fw-bold">{{ overview_stats.data_coverage.rate_coverage_pct }}%</span>
+                                <span class="fw-bold">{{ overview_stats.data_coverage.rate_coverage_pct|default:0 }}%</span>
                             </div>
                             <div class="coverage-bar">
-                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.rate_coverage_pct }}%"></div>
+                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.rate_coverage_pct|default:0 }}%"></div>
                             </div>
                         </div>
                         
@@ -348,7 +328,7 @@
                                 <span class="fw-bold">{{ overview_stats.data_coverage.professional_pct }}%</span>
                             </div>
                             <div class="coverage-bar">
-                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.professional_pct }}%"></div>
+                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.professional_pct|default:0 }}%"></div>
                             </div>
                         </div>
                         
@@ -358,7 +338,7 @@
                                 <span class="fw-bold">{{ overview_stats.data_coverage.institutional_pct }}%</span>
                             </div>
                             <div class="coverage-bar">
-                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.institutional_pct }}%"></div>
+                                <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.institutional_pct|default:0 }}%"></div>
                             </div>
                         </div>
                     </div>
@@ -376,25 +356,25 @@
                         <div class="row">
                             <div class="col-6">
                                 <div class="text-center mb-3">
-                                    <div class="h4 text-primary">{{ overview_stats.summary.distinct_procedure_classes|intcomma }}</div>
+                                    <div class="h4 text-primary">{{ overview_stats.summary.distinct_procedure_classes|default:0|intcomma }}</div>
                                     <small class="text-muted">Procedure Classes</small>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="text-center mb-3">
-                                    <div class="h4 text-info">{{ overview_stats.summary.distinct_procedure_groups|intcomma }}</div>
+                                    <div class="h4 text-info">{{ overview_stats.summary.distinct_procedure_groups|default:0|intcomma }}</div>
                                     <small class="text-muted">Procedure Groups</small>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="text-center mb-3">
-                                    <div class="h4 text-warning">{{ overview_stats.summary.distinct_cbsa_regions|intcomma }}</div>
+                                    <div class="h4 text-warning">{{ overview_stats.summary.distinct_cbsa_regions|default:0|intcomma }}</div>
                                     <small class="text-muted">CBSA Regions</small>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="text-center mb-3">
-                                    <div class="h4 text-success">{{ overview_stats.summary.distinct_billing_codes|intcomma }}</div>
+                                    <div class="h4 text-success">{{ overview_stats.summary.distinct_billing_codes|default:0|intcomma }}</div>
                                     <small class="text-muted">Billing Codes</small>
                                 </div>
                             </div>
@@ -414,7 +394,7 @@
                         </h6>
                     </div>
                     <div class="card-body">
-                        {% for payer in overview_stats.top_payers %}
+                        {% for payer in overview_stats.top_payers|default:[] %}
                         <div class="top-item">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="fw-bold">{{ payer.name }}</span>
@@ -434,7 +414,7 @@
                         </h6>
                     </div>
                     <div class="card-body">
-                        {% for org in overview_stats.top_organizations %}
+                        {% for org in overview_stats.top_organizations|default:[] %}
                         <div class="top-item">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="fw-bold">{{ org.name }}</span>
@@ -454,7 +434,7 @@
                         </h6>
                     </div>
                     <div class="card-body">
-                        {% for proc_set in overview_stats.top_procedure_sets %}
+                        {% for proc_set in overview_stats.top_procedure_sets|default:[] %}
                         <div class="top-item">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="fw-bold">{{ proc_set.name }}</span>
@@ -626,11 +606,7 @@
     </div>
 </div>
 
-<!-- Preload Indicator -->
-<div id="preloadIndicator" class="preload-indicator hidden">
-    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-    Preloading insights data...
-</div>
+<!-- Preload indicator removed for simplicity -->
 
 {% endblock %}
 
@@ -638,11 +614,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const proceedButton = document.getElementById('proceedButton');
-    const preloadIndicator = document.getElementById('preloadIndicator');
     const stateCode = proceedButton.dataset.state;
     
-    // Start background preloading immediately when page loads
-    startBackgroundPreloading();
+    // Background preloading removed for simplicity
     
     // Handle proceed button click
     proceedButton.addEventListener('click', function() {
@@ -1067,136 +1041,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function startBackgroundPreloading() {
-        // Show preload indicator
-        preloadIndicator.classList.remove('hidden');
-        
-        // Preload insights page data in background
-        const preloadPromises = [
-            preloadInsightsData(),
-            preloadFilterOptions(),
-            preloadSampleData()
-        ];
-        
-        // Hide indicator when preloading is complete
-        Promise.allSettled(preloadPromises).then(() => {
-            setTimeout(() => {
-                preloadIndicator.classList.add('hidden');
-            }, 1000);
-        });
-    }
+    // Background preloading removed for simplicity
     
-    async function preloadInsightsData() {
-        try {
-            // Preload the insights page HTML
-            const response = await fetch(`/commercial/insights/${stateCode}/`, {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'text/html'
-                }
-            });
-            
-            if (response.ok) {
-                // Store in sessionStorage for instant access
-                const html = await response.text();
-                sessionStorage.setItem(`insights_${stateCode}`, html);
-                console.log('Insights page preloaded successfully');
-            }
-        } catch (error) {
-            console.log('Background preloading failed:', error);
-        }
-    }
-    
-    async function preloadFilterOptions() {
-        try {
-            // Preload filter options data
-            const response = await fetch(`/commercial/insights/${stateCode}/api/filter-options/`, {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                sessionStorage.setItem(`filter_options_${stateCode}`, JSON.stringify(data));
-                console.log('Filter options preloaded successfully');
-            }
-        } catch (error) {
-            console.log('Filter options preloading failed:', error);
-        }
-    }
-    
-    async function preloadSampleData() {
-        try {
-            // Preload sample data for charts
-            const response = await fetch(`/commercial/insights/${stateCode}/api/sample-data/`, {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                sessionStorage.setItem(`sample_data_${stateCode}`, JSON.stringify(data));
-                console.log('Sample data preloaded successfully');
-            }
-        } catch (error) {
-            console.log('Sample data preloading failed:', error);
-        }
-    }
-    
-    // Preload CSS and JS resources
-    function preloadResources() {
-        const resources = [
-            '/static/css/shared_filters.css',
-            'https://cdn.plot.ly/plotly-2.24.1.min.js'
-        ];
-        
-        resources.forEach(resource => {
-            if (resource.endsWith('.css')) {
-                const link = document.createElement('link');
-                link.rel = 'preload';
-                link.href = resource;
-                link.as = 'style';
-                document.head.appendChild(link);
-            } else if (resource.endsWith('.js')) {
-                const script = document.createElement('script');
-                script.src = resource;
-                script.async = true;
-                document.head.appendChild(script);
-            }
-        });
-    }
-    
-    // Start resource preloading
-    preloadResources();
-    
-    // Register service worker for caching
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/js/preload-worker.js')
-            .then(registration => {
-                console.log('Service Worker registered:', registration);
-                
-                // Request background sync for preloading
-                if ('sync' in registration) {
-                    registration.sync.register('preload-insights');
-                }
-            })
-            .catch(error => {
-                console.log('Service Worker registration failed:', error);
-            });
-    }
-    
-    // Warm up the insights page route
-    setTimeout(() => {
-        const img = new Image();
-        img.src = `/commercial/insights/${stateCode}/`;
-    }, 2000);
+    // Service worker and route warming removed for simplicity
 });
 </script>
 {% endblock %}

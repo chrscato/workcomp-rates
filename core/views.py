@@ -72,6 +72,11 @@ def commercial_rate_insights_state(request, state_code):
         # Initialize data manager with state-specific file
         data_manager = ParquetDataManager(state=state_code)
         
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
+        
         # Get active filters from request
         active_filters = {
             'payer': request.GET.getlist('payer'),
@@ -245,6 +250,11 @@ def commercial_rate_insights_compare(request, state_code):
         # Initialize data manager with state-specific file
         data_manager = ParquetDataManager(state=state_code)
         
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
+        
         # Get active filters from request
         active_filters = {
             'payer': request.GET.getlist('payer'),
@@ -334,6 +344,11 @@ def custom_network_analysis(request, state_code):
         
         # Initialize data manager with state-specific file
         data_manager = ParquetDataManager(state=state_code)
+        
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
         
         # Handle file upload
         custom_tins = []
@@ -501,6 +516,11 @@ def commercial_rate_insights_overview(request, state_code):
         logger.info(f"Data manager initialized with file: {data_manager.file_path}")
         logger.info(f"Data manager has_data: {data_manager.has_data}")
         
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
+        
         # Get overview statistics without any filters (full dataset)
         overview_stats = data_manager.get_overview_statistics()
         
@@ -596,6 +616,11 @@ def commercial_rate_insights_overview_simple(request, state_code):
         data_manager = ParquetDataManager(state=state_code)
         logger.info(f"Data manager has_data: {data_manager.has_data}")
         
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
+        
         # Get overview statistics without any prefilters
         logger.info("Getting overview statistics...")
         overview_stats = data_manager.get_overview_statistics()
@@ -647,6 +672,11 @@ def api_filter_options(request, state_code):
         # Initialize data manager with state-specific file
         data_manager = ParquetDataManager(state=state_code)
         
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
+        
         # Get filter options without any active filters
         filters = {
             'payers': data_manager.get_unique_values('payer', {}),
@@ -684,6 +714,11 @@ def api_sample_data(request, state_code):
         
         # Initialize data manager with state-specific file
         data_manager = ParquetDataManager(state=state_code)
+        
+        # Check if data manager has data, if not, fall back to sample data
+        if not data_manager.has_data:
+            logger.info(f"State-specific data not found for {state_code}, using sample data")
+            data_manager = ParquetDataManager()  # Use default sample data
         
         # Get sample data for charts
         sample_records = data_manager.get_sample_records({}, limit=50)
