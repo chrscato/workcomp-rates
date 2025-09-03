@@ -284,7 +284,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-primary mb-2">{{ overview_stats.summary.total_records|floatformat:0|intcomma }}</div>
+                        <div class="display-6 text-primary mb-2">{{ overview_stats.summary.total_records|default:0|floatformat:0|intcomma }}</div>
                         <h6 class="card-title">Total Records</h6>
                         <small class="text-muted">Complete dataset size</small>
                     </div>
@@ -294,7 +294,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-success mb-2">{{ overview_stats.summary.distinct_payers|intcomma }}</div>
+                        <div class="display-6 text-success mb-2">{{ overview_stats.summary.distinct_payers|default:0|intcomma }}</div>
                         <h6 class="card-title">Distinct Payers</h6>
                         <small class="text-muted">Insurance companies</small>
                     </div>
@@ -304,7 +304,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-info mb-2">{{ overview_stats.summary.distinct_organizations|intcomma }}</div>
+                        <div class="display-6 text-info mb-2">{{ overview_stats.summary.distinct_organizations|default:0|intcomma }}</div>
                         <h6 class="card-title">Distinct Organizations</h6>
                         <small class="text-muted">Healthcare providers</small>
                     </div>
@@ -314,7 +314,7 @@
             <div class="col-md-3 mb-3">
                 <div class="card stat-card h-100">
                     <div class="card-body text-center">
-                        <div class="display-6 text-warning mb-2">{{ overview_stats.summary.distinct_procedure_sets|intcomma }}</div>
+                        <div class="display-6 text-warning mb-2">{{ overview_stats.summary.distinct_procedure_sets|default:0|intcomma }}</div>
                         <h6 class="card-title">Procedure Sets</h6>
                         <small class="text-muted">Medical specialties</small>
                     </div>
@@ -335,7 +335,7 @@
                         <div class="mb-3">
                             <div class="d-flex justify-content-between mb-1">
                                 <span>Records with Rates</span>
-                                <span class="fw-bold">{{ overview_stats.data_coverage.rate_coverage_pct }}%</span>
+                                <span class="fw-bold">{{ overview_stats.data_coverage.rate_coverage_pct|default:0 }}%</span>
                             </div>
                             <div class="coverage-bar">
                                 <div class="coverage-fill" style="width: {{ overview_stats.data_coverage.rate_coverage_pct }}%"></div>
@@ -642,7 +642,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const stateCode = proceedButton.dataset.state;
     
     // Start background preloading immediately when page loads
-    startBackgroundPreloading();
+    // startBackgroundPreloading(); // Temporarily disabled to prevent preloading errors
     
     // Handle proceed button click
     proceedButton.addEventListener('click', function() {
@@ -1102,6 +1102,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const html = await response.text();
                 sessionStorage.setItem(`insights_${stateCode}`, html);
                 console.log('Insights page preloaded successfully');
+            } else {
+                console.log('Insights page preloading failed with status:', response.status);
             }
         } catch (error) {
             console.log('Background preloading failed:', error);
@@ -1123,6 +1125,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 sessionStorage.setItem(`filter_options_${stateCode}`, JSON.stringify(data));
                 console.log('Filter options preloaded successfully');
+            } else {
+                console.log('Filter options preloading failed with status:', response.status);
             }
         } catch (error) {
             console.log('Filter options preloading failed:', error);
@@ -1144,6 +1148,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 sessionStorage.setItem(`sample_data_${stateCode}`, JSON.stringify(data));
                 console.log('Sample data preloaded successfully');
+            } else {
+                console.log('Sample data preloading failed with status:', response.status);
             }
         } catch (error) {
             console.log('Sample data preloading failed:', error);
