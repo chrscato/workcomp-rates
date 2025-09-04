@@ -32,71 +32,13 @@
             
             <!-- Summary Cards -->
             <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="card bg-primary text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="card-title">{{ total_activities }}</h4>
-                                    <p class="card-text">Total Activities</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="bi bi-activity fs-1"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <div class="card bg-success text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="card-title">{{ unique_users }}</h4>
-                                    <p class="card-text">Active Users</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="bi bi-people fs-1"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <div class="card bg-info text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="card-title">{{ days }}</h4>
-                                    <p class="card-text">Days Analyzed</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="bi bi-calendar-range fs-1"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <div class="card bg-warning text-white">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="card-title">{{ action_counts|length }}</h4>
-                                    <p class="card-text">Action Types</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="bi bi-list-ul fs-1"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {% include "core/partials/summary_card.html" with value=total_activities title="Total Activities" icon="bi-activity" color="primary" %}
+                {% include "core/partials/summary_card.html" with value=unique_users title="Active Users" icon="bi-people" color="success" %}
+                {% include "core/partials/summary_card.html" with value=days title="Days Analyzed" icon="bi-calendar-range" color="info" %}
+                {% include "core/partials/summary_card.html" with value=action_counts|length title="Action Types" icon="bi-list-ul" color="warning" %}
             </div>
-            
+
+
             <div class="row">
                 <!-- Action Breakdown -->
                 <div class="col-md-6 mb-4">
