@@ -608,53 +608,30 @@ def commercial_rate_insights_overview(request, state_code):
 
 @login_required
 def commercial_rate_insights_overview_simple(request, state_code):
-    """
-    Simplified State-specific Commercial Rate Data Overview
-    Shows dataset statistics without prefilters, with direct link to insights
-    """
+    """Simplified state overview page that loads data asynchronously."""
     try:
-        # Validate state code
         state_code = state_code.upper()
-        logger.info(f"Loading overview for state: {state_code}")
-        
+        logger.info(f"Loading overview shell for state: {state_code}")
+
         available_states = ParquetDataManager.get_available_states()
-        logger.info(f"Available states check - GA status: {available_states.get('GA', 'not found')}")
-        
         if state_code not in available_states or available_states[state_code] != 'available':
-            logger.warning(f"State {state_code} not available. Status: {available_states.get(state_code, 'not found')}")
+            logger.warning(
+                f"State {state_code} not available. Status: {available_states.get(state_code, 'not found')}"
+            )
             context = {
                 'has_data': False,
                 'error_message': f'Sorry, {state_code} data is not available yet. Please try another state.',
                 'state_code': state_code,
-                'state_name': ParquetDataManager.get_state_name(state_code)
+                'state_name': ParquetDataManager.get_state_name(state_code),
             }
             return render(request, 'core/commercial_rate_insights_overview_simple.html', context)
-        
-        # Initialize data manager with state-specific file
-        logger.info(f"Initializing data manager for {state_code}")
-        data_manager = ParquetDataManager(state=state_code)
-        logger.info(f"Data manager has_data: {data_manager.has_data}")
-        
-        # Get overview statistics without any prefilters
-        logger.info("Getting overview statistics...")
-        overview_stats = data_manager.get_overview_statistics()
-        logger.info(f"Overview stats retrieved: {len(overview_stats)} keys")
-        
-        # Get sample records without any prefilters
-        logger.info("Getting sample records...")
-        sample_records = data_manager.get_sample_records({}, limit=5)
-        logger.info(f"Sample records retrieved: {len(sample_records)} records")
-        
+
         context = {
             'has_data': True,
             'state_code': state_code,
             'state_name': ParquetDataManager.get_state_name(state_code),
-            'overview_stats': overview_stats,
-            'sample_records': sample_records
         }
-        
-        logger.info("Context prepared successfully")
-        
+
     except Exception as e:
         logger.error(f"Error in commercial_rate_insights_overview_simple view: {str(e)}")
         import traceback
@@ -663,9 +640,9 @@ def commercial_rate_insights_overview_simple(request, state_code):
             'has_data': False,
             'error_message': f'An error occurred while loading overview data: {str(e)}',
             'state_code': state_code if 'state_code' in locals() else 'Unknown',
-            'state_name': ParquetDataManager.get_state_name(state_code) if 'state_code' in locals() else 'Unknown'
+            'state_name': ParquetDataManager.get_state_name(state_code) if 'state_code' in locals() else 'Unknown',
         }
-    
+
     return render(request, 'core/commercial_rate_insights_overview_simple.html', context)
 
 
@@ -736,9 +713,33 @@ def api_sample_data(request, state_code):
         }
         
         return JsonResponse(sample_data)
-        
+
     except Exception as e:
         logger.error(f"Error in api_sample_data: {str(e)}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+@login_required
+def api_state_overview(request, state_code):
+    """Return overview statistics and sample records for a state."""
+    try:
+        state_code = state_code.upper()
+        available_states = ParquetDataManager.get_available_states()
+
+        if state_code not in available_states or available_states[state_code] != 'available':
+            return JsonResponse({'error': 'State not available'}, status=404)
+
+        data_manager = ParquetDataManager(state=state_code)
+        overview_stats = data_manager.get_overview_statistics()
+        sample_records = data_manager.get_sample_records({}, limit=5)
+
+        return JsonResponse({
+            'overview_stats': overview_stats,
+            'sample_records': sample_records,
+        })
+
+    except Exception as e:
+        logger.error(f"Error in api_state_overview: {str(e)}")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
