@@ -752,40 +752,62 @@ def user_activity_dashboard(request):
     end_date = timezone.now()
     start_date = end_date - timedelta(days=days)
     
-    # Get activity data
-    activities = UserActivity.objects.filter(
-        timestamp__gte=start_date,
-        timestamp__lte=end_date
-    ).select_related('user').order_by('-timestamp')
-    
-    # Get summary statistics
-    total_activities = activities.count()
-    unique_users = activities.values('user').distinct().count()
-    
-    # Action breakdown
-    action_counts = activities.values('action').annotate(
-        count=models.Count('id')
-    ).order_by('-count')
-    
-    # Recent activities (last 50)
-    recent_activities = activities[:50]
-    
-    # Top active users
-    top_users = activities.values('user__username').annotate(
-        count=models.Count('id')
-    ).order_by('-count')[:10]
-    
-    context = {
-        'total_activities': total_activities,
-        'unique_users': unique_users,
-        'action_counts': action_counts,
-        'recent_activities': recent_activities,
-        'top_users': top_users,
-        'days': days,
-        'start_date': start_date,
-        'end_date': end_date,
-    }
-    
+    # Cache key based on date range
+    cache_key = f"user_activity_dashboard_{start_date.isoformat()}_{end_date.isoformat()}"
+    context = cache.get(cache_key)
+
+    if not context:
+        filter_params = {
+            'timestamp__gte': start_date,
+            'timestamp__lte': end_date,
+        }
+
+        # Get summary statistics
+        total_activities = UserActivity.objects.filter(**filter_params).count()
+        unique_users = (
+            UserActivity.objects.filter(**filter_params)
+            .values('user')
+            .distinct()
+            .count()
+        )
+
+        # Action breakdown
+        action_counts = list(
+            UserActivity.objects.filter(**filter_params)
+            .values('action')
+            .annotate(count=models.Count('id'))
+            .order_by('-count')
+        )
+
+        # Recent activities (last 50) with only required fields
+        recent_activities = list(
+            UserActivity.objects.filter(**filter_params)
+            .select_related('user')
+            .only('timestamp', 'action', 'page_url', 'page_title', 'user__username')
+            .order_by('-timestamp')[:50]
+        )
+
+        # Top active users
+        top_users = list(
+            UserActivity.objects.filter(**filter_params)
+            .values('user__username')
+            .annotate(count=models.Count('id'))
+            .order_by('-count')[:10]
+        )
+
+        context = {
+            'total_activities': total_activities,
+            'unique_users': unique_users,
+            'action_counts': action_counts,
+            'recent_activities': recent_activities,
+            'top_users': top_users,
+            'days': days,
+            'start_date': start_date,
+            'end_date': end_date,
+        }
+
+        cache.set(cache_key, context, 300)
+
     return render(request, 'core/user_activity_dashboard.html', context)
 
 
