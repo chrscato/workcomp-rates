@@ -5,10 +5,17 @@ import glob
 from pathlib import Path
 import logging
 from typing import Optional, Dict, Any, List
+import threading
+import hashlib
+import json
 
 logger = logging.getLogger(__name__)
 
 class ParquetDataManager:
+    # Class-level connection pool for better performance
+    _connection_pool = {}
+    _pool_lock = threading.Lock()
+    
     def __init__(self, file_path: Optional[str] = None, state: Optional[str] = None):
         if file_path:
             self.file_path = file_path
@@ -31,6 +38,85 @@ class ParquetDataManager:
         self.has_data = os.path.exists(self.file_path)
         if not self.has_data:
             logger.warning(f"Data file not found: {self.file_path}. Using sample data.")
+        
+        # Initialize connection for this instance
+        self._init_connection()
+    
+    def _init_connection(self):
+        """Initialize or get connection from pool"""
+        with self._pool_lock:
+            if self.file_path not in self._connection_pool:
+                try:
+                    con = duckdb.connect(database=':memory:')
+                    if self.has_data:
+                        con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
+                    else:
+                        # Use sample data
+                        sample_df = self._get_sample_data()
+                        con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+                    
+                    self._connection_pool[self.file_path] = con
+                    logger.info(f"Created new connection for {self.file_path}")
+                except Exception as e:
+                    logger.error(f"Failed to create connection for {self.file_path}: {str(e)}")
+                    self._connection_pool[self.file_path] = None
+            
+            self.connection = self._connection_pool[self.file_path]
+    
+    def _get_connection(self):
+        """Get connection, reinitialize if needed"""
+        if self.connection is None:
+            self._init_connection()
+        
+        # Test the connection to make sure it's still valid
+        try:
+            if self.connection:
+                # Simple test query to verify connection is working
+                self.connection.execute("SELECT 1").fetchone()
+        except Exception as e:
+            logger.warning(f"Connection test failed, reinitializing: {str(e)}")
+            # Connection is corrupted, reinitialize
+            with self._pool_lock:
+                if self.file_path in self._connection_pool:
+                    try:
+                        self._connection_pool[self.file_path].close()
+                    except:
+                        pass
+                    del self._connection_pool[self.file_path]
+            self._init_connection()
+        
+        return self.connection
+    
+    @classmethod
+    def cleanup_connections(cls):
+        """Clean up all connections in the pool"""
+        with cls._pool_lock:
+            for file_path, con in cls._connection_pool.items():
+                if con:
+                    try:
+                        con.close()
+                    except:
+                        pass
+            cls._connection_pool.clear()
+            logger.info("Cleaned up all database connections")
+    
+    @staticmethod
+    def generate_cache_key(state_code: str, filters: Dict[str, Any]) -> str:
+        """Generate a consistent cache key for filters"""
+        # Sort filters to ensure consistent ordering
+        sorted_filters = {}
+        for key in sorted(filters.keys()):
+            if filters[key]:  # Only include non-empty filters
+                if isinstance(filters[key], list):
+                    sorted_filters[key] = sorted(filters[key])
+                else:
+                    sorted_filters[key] = filters[key]
+        
+        # Create a deterministic hash
+        filter_str = json.dumps(sorted_filters, sort_keys=True)
+        filter_hash = hashlib.md5(filter_str.encode()).hexdigest()
+        
+        return f"insights_{state_code}_{filter_hash}"
 
     @staticmethod
     def get_available_states() -> Dict[str, str]:
@@ -137,14 +223,10 @@ class ParquetDataManager:
     def get_unique_values(self, column: str, filters: Optional[Dict[str, Any]] = None) -> List[Any]:
         """Get unique values for a column with optional filters."""
         try:
-            con = duckdb.connect(database=':memory:')
-            
-            if self.has_data:
-                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
-            else:
-                # Use sample data
-                sample_df = self._get_sample_data()
-                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            con = self._get_connection()
+            if not con:
+                logger.error("No database connection available")
+                return []
             
             # Build WHERE clause from filters
             where_sql = self.build_where_clause(filters or {})
@@ -167,14 +249,13 @@ class ParquetDataManager:
     def get_aggregated_stats(self, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Get aggregated statistics with optional filters."""
         try:
-            con = duckdb.connect(database=':memory:')
-            
-            if self.has_data:
-                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
-            else:
-                # Use sample data
-                sample_df = self._get_sample_data()
-                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            con = self._get_connection()
+            if not con:
+                logger.error("No database connection available")
+                return {
+                    'professional': {'avg_rate': 0, 'ga_prof_mar': 0, 'ga_prof_pct': 0, 'medicare_prof_mar': 0, 'medicare_prof_pct': 0, 'record_count': 0},
+                    'facility': {'avg_rate': 0, 'ga_op_mar': 0, 'ga_op_pct': 0, 'ga_asc_mar': 0, 'ga_asc_pct': 0, 'medicare_op_mar_stateavg': 0, 'medicare_op_pct': 0, 'medicare_asc_mar_stateavg': 0, 'medicare_asc_pct': 0, 'record_count': 0}
+                }
             
             # Build WHERE clause from filters
             where_sql = self.build_where_clause(filters or {})
@@ -336,14 +417,10 @@ class ParquetDataManager:
     def get_sample_records(self, filters: Optional[Dict[str, Any]] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """Get sample records with optional filters."""
         try:
-            con = duckdb.connect(database=':memory:')
-            
-            if self.has_data:
-                con.execute(f"CREATE VIEW commercial_rates AS SELECT * FROM read_parquet('{self.file_path}')")
-            else:
-                # Use sample data
-                sample_df = self._get_sample_data()
-                con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
+            con = self._get_connection()
+            if not con:
+                logger.error("No database connection available")
+                return []
             
             # Build WHERE clause from filters
             where_sql = self.build_where_clause(filters or {})

@@ -1,25 +1,23 @@
-from django.db.models.signals import post_save
+"""
+Django signals for cleanup and optimization
+"""
+import logging
+from django.core.signals import request_finished
 from django.dispatch import receiver
-from django.contrib.auth.signals import user_logged_in, user_logged_out
-from django.contrib.auth.models import User
-from .models import UserActivity
+from .utils.parquet_utils import ParquetDataManager
 
-@receiver(user_logged_in)
-def log_user_login(sender, request, user, **kwargs):
-    """Log when a user logs in."""
-    UserActivity.log_activity(
-        user=user,
-        action='login',
-        page_url=request.path if request else '',
-        page_title='User Login'
-    )
+logger = logging.getLogger(__name__)
 
-@receiver(user_logged_out)
-def log_user_logout(sender, request, user, **kwargs):
-    """Log when a user logs out."""
-    UserActivity.log_activity(
-        user=user,
-        action='logout',
-        page_url=request.path if request else '',
-        page_title='User Logout'
-    )
+@receiver(request_finished)
+def cleanup_connections(sender, **kwargs):
+    """
+    Clean up database connections after each request to prevent memory leaks
+    """
+    try:
+        # Clean up DuckDB connections periodically
+        # Only do this every 10th request to avoid overhead
+        import random
+        if random.randint(1, 10) == 1:
+            ParquetDataManager.cleanup_connections()
+    except Exception as e:
+        logger.error(f"Error cleaning up connections: {str(e)}")

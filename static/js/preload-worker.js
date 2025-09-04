@@ -23,15 +23,23 @@ self.addEventListener('install', event => {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
     
-    // Handle insights page requests
+    // Handle insights page requests - don't cache pages with query parameters
     if (url.pathname.includes('/commercial/insights/') && url.pathname.endsWith('/')) {
+        // Don't cache pages with filter parameters to avoid stale data
+        if (url.search) {
+            // Always fetch fresh data for filtered requests
+            event.respondWith(fetch(event.request));
+            return;
+        }
+        
+        // Only cache base insights pages without filters
         event.respondWith(
             caches.open(CACHE_NAME)
                 .then(cache => {
                     return cache.match(event.request)
                         .then(response => {
                             if (response) {
-                                console.log('Serving insights page from cache');
+                                console.log('Serving base insights page from cache');
                                 return response;
                             }
                             

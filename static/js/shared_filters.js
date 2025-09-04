@@ -34,17 +34,52 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Function to submit form
+    // Debounced form submission to prevent rapid reloads
+    let submitTimeout;
     function submitForm() {
-        const formData = new FormData(filterForm);
-        const params = new URLSearchParams(formData);
-        window.location.href = `${window.location.pathname}?${params.toString()}`;
+        // Clear any existing timeout
+        if (submitTimeout) {
+            clearTimeout(submitTimeout);
+        }
+        
+        // Show loading indicator
+        showLoadingIndicator();
+        
+        // Debounce the actual submission
+        submitTimeout = setTimeout(() => {
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams(formData);
+            window.location.href = `${window.location.pathname}?${params.toString()}`;
+        }, 500); // 500ms delay
+    }
+    
+    // Function to show loading indicator
+    function showLoadingIndicator() {
+        // Create or update loading indicator
+        let loadingIndicator = document.getElementById('filterLoadingIndicator');
+        if (!loadingIndicator) {
+            loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'filterLoadingIndicator';
+            loadingIndicator.className = 'alert alert-info d-flex align-items-center';
+            loadingIndicator.innerHTML = `
+                <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                <span>Updating filters...</span>
+            `;
+            
+            // Insert after the filter form
+            const filterCard = document.querySelector('.card.shadow-sm');
+            if (filterCard) {
+                filterCard.parentNode.insertBefore(loadingIndicator, filterCard.nextSibling);
+            }
+        }
+        
+        loadingIndicator.style.display = 'block';
     }
 
     // Add change event listeners to all filters
     filterSelects.forEach(select => {
         select.addEventListener('change', () => {
-            submitForm();  // Submit form immediately on any filter change
+            submitForm();  // Submit form with debouncing
         });
     });
 

@@ -74,6 +74,16 @@
             </div>
         {% endif %}
 
+        <!-- Loading Indicator for Filters -->
+        <div class="row mb-3" id="filterLoadingIndicator" style="display: none;">
+            <div class="col-12">
+                <div class="alert alert-info d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                    <span>Updating filters and loading data...</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Shared Filters Template -->
         {% include 'core/shared_filters.html' %}
 

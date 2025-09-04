@@ -70,7 +70,26 @@ def commercial_rate_insights_state(request, state_code):
             return render(request, 'core/commercial_rate_insights_state.html', context)
         
         # Initialize data manager with state-specific file
-        data_manager = ParquetDataManager(state=state_code)
+        try:
+            data_manager = ParquetDataManager(state=state_code)
+            if not data_manager.has_data:
+                logger.error(f"Data file not found for {state_code}")
+                context = {
+                    'has_data': False,
+                    'error_message': f'Sorry, {state_code} data is not available yet. Please try another state.',
+                    'state_code': state_code,
+                    'state_name': ParquetDataManager.get_state_name(state_code)
+                }
+                return render(request, 'core/commercial_rate_insights_state.html', context)
+        except Exception as e:
+            logger.error(f"Failed to initialize data manager for {state_code}: {str(e)}")
+            context = {
+                'has_data': False,
+                'error_message': 'An error occurred while initializing the data manager.',
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            return render(request, 'core/commercial_rate_insights_state.html', context)
         
         # Get active filters from request
         active_filters = {
@@ -89,14 +108,16 @@ def commercial_rate_insights_state(request, state_code):
         # Remove empty filters
         active_filters = {k: v for k, v in active_filters.items() if v}
         
-        # Create cache key based on state and filters
-        cache_key = f"ga_insights_{state_code}_{hash(str(active_filters))}"
+        # Create cache key based on state and filters using improved method
+        cache_key = ParquetDataManager.generate_cache_key(state_code, active_filters)
         
         # Try to get cached data first
         cached_data = cache.get(cache_key)
         if cached_data:
             logger.info(f"Using cached data for {state_code}")
             context = cached_data
+            # Extract filters from cached context for logging
+            filters = context.get('filters', {})
         else:
             # Get filtered options for each field based on current selections
             filters = {
@@ -139,11 +160,29 @@ def commercial_rate_insights_state(request, state_code):
         # Debug logging
         logger.info(f"State: {state_code}")
         logger.info(f"Active filters: {active_filters}")
-        logger.info(f"Available organizations: {len(filters['organizations'])}")
-        logger.info(f"Available payers: {len(filters['payers'])}")
+        logger.info(f"Available organizations: {len(filters.get('organizations', []))}")
+        logger.info(f"Available payers: {len(filters.get('payers', []))}")
             
     except Exception as e:
         logger.error(f"Error in commercial_rate_insights_state view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Clear any corrupted cache entries
+        try:
+            cache_key = ParquetDataManager.generate_cache_key(state_code, {})
+            cache.delete(cache_key)
+            logger.info(f"Cleared corrupted cache for {state_code}")
+        except:
+            pass
+        
+        # Clean up connections if there's a connection issue
+        try:
+            ParquetDataManager.cleanup_connections()
+            logger.info("Cleaned up connections due to error")
+        except:
+            pass
+        
         context = {
             'has_data': False,
             'error_message': 'An error occurred while processing the data.',
