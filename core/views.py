@@ -1,6 +1,6 @@
 import json
 import logging
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse
 from django.utils import timezone
@@ -196,69 +196,10 @@ def commercial_rate_insights_state(request, state_code):
 @login_required
 def commercial_rate_insights(request):
     """
-    Commercial Rate Insights Dashboard with sample data for demonstration
+    Commercial Rate Insights Dashboard - redirects to GA state view by default
     """
-    try:
-        # Initialize data manager with sample data
-        data_manager = ParquetDataManager()
-        
-        # Get active filters from request
-        active_filters = {
-            'payer': request.GET.getlist('payer'),
-            'org_name': request.GET.getlist('org_name'),
-            'procedure_set': request.GET.getlist('procedure_set'),
-            'procedure_class': request.GET.getlist('procedure_class'),
-            'procedure_group': request.GET.getlist('procedure_group'),
-            'cbsa': request.GET.getlist('cbsa'),
-            'billing_code': request.GET.getlist('billing_code'),
-            'tin_value': request.GET.getlist('tin_value'),
-            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
-            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
-        }
-        
-        # Remove empty filters
-        active_filters = {k: v for k, v in active_filters.items() if v}
-        
-        # Get filtered options for each field based on current selections
-        filters = {
-            'payers': data_manager.get_unique_values('payer', active_filters),
-            'organizations': data_manager.get_unique_values('org_name', active_filters),
-            'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
-            'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
-            'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
-            'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
-            'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
-            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
-            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
-            'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
-        }
-        
-        # Get aggregated statistics with filters
-        stats = data_manager.get_aggregated_stats(active_filters)
-        
-        # Get base statistics for shared filters template
-        base_stats = data_manager.get_base_statistics(active_filters)
-        
-        # Get sample records
-        sample_records = data_manager.get_sample_records(active_filters, limit=10)
-        
-        context = {
-            'filters': filters,
-            'stats': stats,
-            'base_stats': base_stats,
-            'active_filters': active_filters,
-            'sample_records': sample_records,
-            'has_data': True
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in commercial_rate_insights view: {str(e)}")
-        context = {
-            'has_data': False,
-            'error_message': 'An error occurred while processing the data.'
-        }
-    
-    return render(request, 'core/commercial_rate_insights.html', context)
+    # Redirect to GA state view since we have GA data available
+    return redirect('commercial_rate_insights_state', state_code='GA')
 
 
 @login_required

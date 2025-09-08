@@ -32,6 +32,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data.id) return data.text;
             return data.text;
         }
+    }).on('select2:select select2:unselect', function() {
+        if (autoSubmit) {
+            submitForm();
+        } else {
+            updateFilterPreview(); // Show preview, don't submit
+        }
     });
     
     // Debounced form submission to prevent rapid reloads
@@ -76,18 +82,58 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingIndicator.style.display = 'block';
     }
 
-    // Add change event listeners to all filters
+    // Check if auto-submit is enabled (default behavior)
+    const autoSubmit = filterForm.getAttribute('data-auto-submit') !== 'false';
+    
+    // Function to update filter preview and enable apply button
+    function updateFilterPreview() {
+        updateActiveFiltersDisplay();
+        
+        // Enable apply button if in manual mode
+        if (!autoSubmit) {
+            const applyButton = filterForm.querySelector('button[type="submit"]');
+            if (applyButton) {
+                applyButton.disabled = false;
+                applyButton.classList.remove('btn-secondary');
+                applyButton.classList.add('btn-primary');
+            }
+        }
+    }
+
+    // Add change event listeners to all filters (only for non-Select2 elements)
     filterSelects.forEach(select => {
-        select.addEventListener('change', () => {
-            submitForm();  // Submit form with debouncing
-        });
+        // Skip Select2 elements as they have their own event handlers
+        if (!$(select).hasClass('select2-hidden-accessible') && !$(select).hasClass('select2-dropdown')) {
+            select.addEventListener('change', () => {
+                if (autoSubmit) {
+                    submitForm();  // Submit form with debouncing
+                } else {
+                    updateFilterPreview(); // Show preview, don't submit
+                }
+            });
+        }
     });
 
-    // Handle Select2 change events
-    if (typeof $ !== 'undefined') {
-        $('.select2-dropdown').on('select2:select select2:unselect', function() {
-            submitForm();
+
+    // Handle form submission manually for manual apply mode
+    if (!autoSubmit) {
+        // Prevent all form submissions by default
+        filterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            // Only submit if the apply button was clicked
+            if (e.submitter && e.submitter.type === 'submit') {
+                submitForm();
+            }
         });
+        
+        // Add click handler to apply button
+        const applyButton = filterForm.querySelector('button[type="submit"]');
+        if (applyButton) {
+            applyButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                submitForm();
+            });
+        }
     }
 
     // Initialize active filters display

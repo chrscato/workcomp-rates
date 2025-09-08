@@ -601,16 +601,18 @@
                 window.location.href = `${window.location.pathname}?${params.toString()}`;
             }
 
-            // Add change event listeners to all filters
+            // Add change event listeners to all filters - NO AUTO-SUBMIT
             filterSelects.forEach(select => {
                 select.addEventListener('change', () => {
-                    submitForm();  // Submit form immediately on any filter change
+                    updateFilterPreview(); // Show preview, don't submit
+                    enableApplyButton();   // Enable apply button
                 });
             });
 
-            // Handle Select2 change events
+            // Handle Select2 change events - NO AUTO-SUBMIT
             $('.select2-dropdown').on('select2:select select2:unselect', function() {
-                submitForm();
+                updateFilterPreview(); // Show preview, don't submit
+                enableApplyButton();   // Enable apply button
             });
 
             // Initialize active filters display
@@ -681,6 +683,85 @@
             
             // Submit the form to clear filters
             const filterForm = document.getElementById('filterForm');
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams(formData);
+            window.location.href = `${window.location.pathname}?${params.toString()}`;
+        }
+
+        // New function to update filter preview without submitting
+        function updateFilterPreview() {
+            const filterSelects = document.querySelectorAll('.filter-select');
+            const previewContainer = document.getElementById('filterPreview');
+            
+            if (!previewContainer) {
+                // Create preview container if it doesn't exist
+                const filterCard = document.querySelector('.card.shadow-sm');
+                if (filterCard) {
+                    const previewDiv = document.createElement('div');
+                    previewDiv.id = 'filterPreview';
+                    previewDiv.className = 'alert alert-warning mt-3';
+                    previewDiv.style.display = 'none';
+                    previewDiv.innerHTML = `
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <i class="fas fa-eye me-2"></i>
+                                <strong>Filter Preview:</strong>
+                                <span id="previewText">No changes made</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-warning" onclick="applyFilters()">
+                                <i class="fas fa-check"></i> Apply Filters
+                            </button>
+                        </div>
+                    `;
+                    filterCard.appendChild(previewDiv);
+                }
+            }
+            
+            const previewText = document.getElementById('previewText');
+            if (!previewText) return;
+            
+            const changes = [];
+            filterSelects.forEach(select => {
+                if (select.value && select.value !== '') {
+                    const filterName = select.getAttribute('data-filter') || select.name;
+                    const filterValue = select.value;
+                    
+                    // Handle both single values and arrays
+                    if (Array.isArray(filterValue) && filterValue.length > 0) {
+                        changes.push(`${filterName}: ${filterValue.join(', ')}`);
+                    } else if (typeof filterValue === 'string' && filterValue.trim() !== '') {
+                        changes.push(`${filterName}: ${filterValue}`);
+                    }
+                }
+            });
+            
+            if (changes.length > 0) {
+                previewText.textContent = changes.join(', ');
+                document.getElementById('filterPreview').style.display = 'block';
+            } else {
+                document.getElementById('filterPreview').style.display = 'none';
+            }
+        }
+
+        // New function to enable apply button
+        function enableApplyButton() {
+            const applyButton = document.querySelector('.btn-primary');
+            if (applyButton) {
+                applyButton.disabled = false;
+                applyButton.classList.remove('btn-secondary');
+                applyButton.classList.add('btn-primary');
+            }
+        }
+
+        // New function to apply filters manually
+        function applyFilters() {
+            const filterForm = document.getElementById('filterForm');
+            if (!filterForm) {
+                console.log('Filter form not found, cannot apply filters');
+                return;
+            }
+            
+            // Submit the form
             const formData = new FormData(filterForm);
             const params = new URLSearchParams(formData);
             window.location.href = `${window.location.pathname}?${params.toString()}`;

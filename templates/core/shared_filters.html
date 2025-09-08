@@ -32,15 +32,40 @@
                 <i class="fas fa-chevron-right" id="filterToggleIcon"></i>
             </div>
             <div class="card-body" id="filterCardBody" style="display: none;">
-                <form method="get" id="filterForm">
-                    <!-- Tier 1: High-Level Filters -->
-                    <div class="filter-tier">
+                <form method="get" id="filterForm" data-auto-submit="false">
+                    <!-- Filter Guidance -->
+                    <div class="alert alert-info mb-3">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6 class="mb-2">
+                                    <i class="fas fa-lightbulb text-warning me-2"></i>
+                                    Filtering Tips
+                                </h6>
+                                <ul class="mb-0 small">
+                                    <li><strong>Start with Primary Filters:</strong> Select Payer, Organization, or Procedure Set first</li>
+                                    <li><strong>Multiple Selections:</strong> You can select multiple options in each filter</li>
+                                    <li><strong>Preview Before Apply:</strong> See your selections before applying filters</li>
+                                    <li><strong>Advanced Options:</strong> Use advanced filters for more specific analysis</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="filter-impact-indicator">
+                                    <small class="text-muted">Filter Impact:</small>
+                                    <div class="badge bg-secondary" id="filterImpact">No filters applied</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Primary Filters - Always Visible -->
+                    <div class="filter-tier primary-filters">
                         <h6 class="filter-tier-title">
-                            <i class="fas fa-globe text-primary"></i>
-                            High-Level Filters
+                            <i class="fas fa-star text-warning"></i>
+                            Primary Filters
+                            <small class="text-muted">(Most commonly used)</small>
                         </h6>
-                        <div class="row g-2">
-                            <div class="col-md-6">
+                        <div class="row g-3">
+                            <div class="col-md-4">
                                 <label for="payer" class="form-label fw-bold">
                                     <i class="fas fa-building text-info"></i> Payer
                                 </label>
@@ -49,8 +74,9 @@
                                         <option value="{{ payer }}" {% if payer in active_filters.payer %}selected{% endif %}>{{ payer }}</option>
                                     {% endfor %}
                                 </select>
+                                <small class="text-muted">Select insurance companies</small>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label for="org_name" class="form-label fw-bold">
                                     <i class="fas fa-hospital text-success"></i> Organization
                                 </label>
@@ -59,123 +85,141 @@
                                         <option value="{{ org }}" {% if org in active_filters.org_name %}selected{% endif %}>{{ org }}</option>
                                     {% endfor %}
                                 </select>
+                                <small class="text-muted">Select healthcare providers</small>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Tier 2: Geographic & Regional Filters -->
-                    <div class="filter-tier">
-                        <h6 class="filter-tier-title">
-                            <i class="fas fa-map-marker-alt text-warning"></i>
-                            Geographic & Regional
-                        </h6>
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <label for="cbsa" class="form-label fw-bold">
-                                    <i class="fas fa-map text-warning"></i> CBSA Region
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa" multiple>
-                                    {% for region in filters.cbsa_regions %}
-                                        <option value="{{ region }}" {% if region in active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="tin_value" class="form-label fw-bold">
-                                    <i class="fas fa-id-card text-secondary"></i> TIN Values
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="tin_value" name="tin_value" data-filter="tin_value" multiple>
-                                    {% for tin in filters.tin_values %}
-                                        <option value="{{ tin }}" {% if tin in active_filters.tin_value %}selected{% endif %}>{{ tin }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Tier 3: Procedure & Service Filters -->
-                    <div class="filter-tier">
-                        <h6 class="filter-tier-title">
-                            <i class="fas fa-stethoscope text-danger"></i>
-                            Procedure & Service Classification
-                        </h6>
-                        <div class="row g-2">
                             <div class="col-md-4">
                                 <label for="procedure_set" class="form-label fw-bold">
-                                    <i class="fas fa-layer-group text-danger"></i> Procedure Set
+                                    <i class="fas fa-procedures text-warning"></i> Procedure Set
                                 </label>
                                 <select class="form-select filter-select select2-dropdown" id="procedure_set" name="procedure_set" data-filter="procedure_set" multiple>
                                     {% for set in filters.procedure_sets %}
                                         <option value="{{ set }}" {% if set in active_filters.procedure_set %}selected{% endif %}>{{ set }}</option>
                                     {% endfor %}
                                 </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="procedure_class" class="form-label fw-bold">
-                                    <i class="fas fa-tags text-danger"></i> Procedure Class
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class" multiple>
-                                    {% for class in filters.procedure_classes %}
-                                        <option value="{{ class }}" {% if class in active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="procedure_group" class="form-label fw-bold">
-                                    <i class="fas fa-object-group text-danger"></i> Procedure Group
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group" multiple>
-                                    {% for group in filters.procedure_groups %}
-                                        <option value="{{ group }}" {% if group in active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
-                                    {% endfor %}
-                                </select>
+                                <small class="text-muted">Select medical specialties</small>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Tier 4: Detailed Service & Provider Filters -->
-                    <div class="filter-tier">
-                        <h6 class="filter-tier-title">
-                            <i class="fas fa-microscope text-info"></i>
-                            Detailed Service & Provider
-                        </h6>
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <label for="billing_code" class="form-label fw-bold">
-                                    <i class="fas fa-barcode text-info"></i> Billing Code
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code" multiple>
-                                    {% for code in filters.billing_codes %}
-                                        <option value="{{ code }}" {% if code in active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
-                                    {% endfor %}
-                                </select>
+
+                    <!-- Advanced Filters - Collapsible -->
+                    <div class="advanced-filters-section">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">
+                                <i class="fas fa-cog text-secondary"></i>
+                                Advanced Filters
+                            </h6>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAdvancedFilters()">
+                                <i class="fas fa-chevron-down" id="advancedToggleIcon"></i>
+                                <span id="advancedToggleText">Show Advanced</span>
+                            </button>
+                        </div>
+                        
+                        <div id="advancedFiltersContent" style="display: none;">
+                            <!-- Geographic & Regional Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-map-marker-alt text-warning"></i>
+                                    Geographic & Regional
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label for="cbsa" class="form-label fw-bold">
+                                            <i class="fas fa-map text-warning"></i> CBSA Region
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="cbsa" name="cbsa" data-filter="cbsa" multiple>
+                                            {% for region in filters.cbsa_regions %}
+                                                <option value="{{ region }}" {% if region in active_filters.cbsa %}selected{% endif %}>{{ region }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="tin_value" class="form-label fw-bold">
+                                            <i class="fas fa-id-card text-secondary"></i> TIN Values
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="tin_value" name="tin_value" data-filter="tin_value" multiple>
+                                            {% for tin in filters.tin_values %}
+                                                <option value="{{ tin }}" {% if tin in active_filters.tin_value %}selected{% endif %}>{{ tin }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-4">
-                                <label for="primary_taxonomy_code" class="form-label fw-bold">
-                                    <i class="fas fa-user-md text-info"></i> Taxonomy Code
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_code" name="primary_taxonomy_code" data-filter="primary_taxonomy_code" multiple>
-                                    {% for code in filters.primary_taxonomy_codes %}
-                                        <option value="{{ code }}" {% if code in active_filters.primary_taxonomy_code %}selected{% endif %}>{{ code }}</option>
-                                    {% endfor %}
-                                </select>
+                            
+                            <!-- Procedure & Service Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-stethoscope text-danger"></i>
+                                    Procedure & Service Classification
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="procedure_class" class="form-label fw-bold">
+                                            <i class="fas fa-tags text-danger"></i> Procedure Class
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="procedure_class" name="procedure_class" data-filter="procedure_class" multiple>
+                                            {% for class in filters.procedure_classes %}
+                                                <option value="{{ class }}" {% if class in active_filters.procedure_class %}selected{% endif %}>{{ class }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="procedure_group" class="form-label fw-bold">
+                                            <i class="fas fa-object-group text-danger"></i> Procedure Group
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="procedure_group" name="procedure_group" data-filter="procedure_group" multiple>
+                                            {% for group in filters.procedure_groups %}
+                                                <option value="{{ group }}" {% if group in active_filters.procedure_group %}selected{% endif %}>{{ group }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="billing_code" class="form-label fw-bold">
+                                            <i class="fas fa-barcode text-info"></i> Billing Code
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="billing_code" name="billing_code" data-filter="billing_code" multiple>
+                                            {% for code in filters.billing_codes %}
+                                                <option value="{{ code }}" {% if code in active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-4">
-                                <label for="primary_taxonomy_desc" class="form-label fw-bold">
-                                    <i class="fas fa-user-nurse text-info"></i> Taxonomy Description
-                                </label>
-                                <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" data-filter="primary_taxonomy_desc" multiple>
-                                    {% for desc in filters.primary_taxonomy_descs %}
-                                        <option value="{{ desc }}" {% if desc in active_filters.primary_taxonomy_desc %}selected{% endif %}>{{ desc }}</option>
-                                    {% endfor %}
-                                </select>
+                            
+                            <!-- Detailed Service & Provider Filters -->
+                            <div class="filter-tier">
+                                <h6 class="filter-tier-title">
+                                    <i class="fas fa-microscope text-info"></i>
+                                    Detailed Service & Provider
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label for="primary_taxonomy_code" class="form-label fw-bold">
+                                            <i class="fas fa-user-md text-info"></i> Taxonomy Code
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_code" name="primary_taxonomy_code" data-filter="primary_taxonomy_code" multiple>
+                                            {% for code in filters.primary_taxonomy_codes %}
+                                                <option value="{{ code }}" {% if code in active_filters.primary_taxonomy_code %}selected{% endif %}>{{ code }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="primary_taxonomy_desc" class="form-label fw-bold">
+                                            <i class="fas fa-user-nurse text-info"></i> Taxonomy Description
+                                        </label>
+                                        <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" data-filter="primary_taxonomy_desc" multiple>
+                                            {% for desc in filters.primary_taxonomy_descs %}
+                                                <option value="{{ desc }}" {% if desc in active_filters.primary_taxonomy_desc %}selected{% endif %}>{{ desc }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Action Buttons -->
                     <div class="filter-actions">
-                        <button type="submit" class="btn btn-primary btn-lg">
+                        <button type="submit" class="btn btn-secondary btn-lg" disabled>
                             <i class="fas fa-filter"></i> Apply Filters
                         </button>
                         <a href="{{ request.path }}" class="btn btn-outline-secondary btn-lg">
