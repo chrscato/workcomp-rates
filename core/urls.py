@@ -5,6 +5,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('commercial/insights/', views.commercial_rate_insights, name='commercial_rate_insights'),
     path('commercial/insights/map/', views.commercial_rate_insights_map, name='commercial_rate_insights_map'),
+    path('commercial/insights/<str:state_code>/npi-selection/', views.npi_type_selection, name='npi_type_selection'),
     path('commercial/insights/<str:state_code>/overview/', views.commercial_rate_insights_overview, name='commercial_rate_insights_overview'),
     path('commercial/insights/<str:state_code>/overview-simple/', views.commercial_rate_insights_overview_simple, name='commercial_rate_insights_overview_simple'),
     path('commercial/insights/<str:state_code>/api/filter-options/', views.api_filter_options, name='api_filter_options'),

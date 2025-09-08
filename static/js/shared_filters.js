@@ -55,6 +55,15 @@ document.addEventListener('DOMContentLoaded', function() {
         submitTimeout = setTimeout(() => {
             const formData = new FormData(filterForm);
             const params = new URLSearchParams(formData);
+            
+            // Preserve existing URL parameters (like npi_type) that aren't in the form
+            const currentParams = new URLSearchParams(window.location.search);
+            for (const [key, value] of currentParams.entries()) {
+                if (!params.has(key)) {
+                    params.append(key, value);
+                }
+            }
+            
             window.location.href = `${window.location.pathname}?${params.toString()}`;
         }, 500); // 500ms delay
     }
@@ -113,6 +122,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+    
 
 
     // Handle form submission manually for manual apply mode
@@ -192,6 +202,7 @@ function updateActiveFiltersDisplay() {
     
     const activeFilters = [];
     
+    // Handle select filters
     filterSelects.forEach(select => {
         if (select.value && select.value !== '') {
             const filterName = select.getAttribute('data-filter') || select.name;
@@ -225,6 +236,7 @@ function clearAllFilters() {
         return;
     }
     
+    // Clear select filters
     filterSelects.forEach(select => {
         select.value = '';
         if (typeof $ !== 'undefined' && $(select).hasClass('select2-hidden-accessible')) {
@@ -235,5 +247,15 @@ function clearAllFilters() {
     // Submit the form to clear filters
     const formData = new FormData(filterForm);
     const params = new URLSearchParams(formData);
+    
+    // Preserve existing URL parameters (like npi_type) that aren't in the form
+    const currentParams = new URLSearchParams(window.location.search);
+    for (const [key, value] of currentParams.entries()) {
+        if (!params.has(key)) {
+            params.append(key, value);
+        }
+    }
+    
     window.location.href = `${window.location.pathname}?${params.toString()}`;
 }
+

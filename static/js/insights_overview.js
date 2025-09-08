@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const proceedButton = document.getElementById('proceedButton');
     const stateCode = proceedButton.dataset.state;
     const stateName = proceedButton.dataset.stateName;
+    const npiType = proceedButton.dataset.npiType;
     
     // Background preloading removed to prevent issues
     
@@ -18,7 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Navigate to insights page after a short delay
         setTimeout(() => {
-            window.location.href = `/commercial/insights/${stateCode}/`;
+            const npiParam = npiType ? `?npi_type=${npiType}` : '';
+            window.location.href = `/commercial/insights/${stateCode}/${npiParam}`;
         }, 500); // Slightly longer delay to show skeleton
     });
     

@@ -182,3 +182,143 @@
     margin-top: 0.25rem;
     font-size: 0.75rem;
 }
+
+/* Quick presets styling */
+.quick-presets {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border: 2px solid #2196f3;
+    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.2);
+}
+
+.quick-presets .filter-tier-title {
+    color: #1565c0;
+    border-bottom-color: #2196f3;
+    font-weight: 700;
+}
+
+.quick-presets .btn {
+    border-radius: 6px;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.quick-presets .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Range filter styling */
+input[type="number"][data-filter] {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+input[type="number"][data-filter]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Enhanced filter tier styling */
+.filter-tier {
+    transition: all 0.3s ease;
+}
+
+.filter-tier:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Provider & billing information styling */
+.filter-tier:nth-of-type(3) {
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    border: 1px solid #9c27b0;
+}
+
+.filter-tier:nth-of-type(3) .filter-tier-title {
+    color: #6a1b9a;
+    border-bottom-color: #9c27b0;
+}
+
+/* Service descriptions styling */
+.filter-tier:nth-of-type(4) {
+    background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+    border: 1px solid #4caf50;
+}
+
+.filter-tier:nth-of-type(4) .filter-tier-title {
+    color: #2e7d32;
+    border-bottom-color: #4caf50;
+}
+
+/* Geographic filters styling */
+.filter-tier:nth-of-type(1) {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%);
+    border: 1px solid #ff9800;
+}
+
+.filter-tier:nth-of-type(1) .filter-tier-title {
+    color: #e65100;
+    border-bottom-color: #ff9800;
+}
+
+/* Improved form label styling */
+.form-label.fw-bold {
+    font-weight: 600 !important;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-label.fw-bold i {
+    font-size: 0.9rem;
+    width: 16px;
+    text-align: center;
+}
+
+/* Enhanced small text styling */
+.text-muted {
+    font-size: 0.75rem;
+    font-style: italic;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* Loading indicator improvements */
+#filterLoadingIndicator {
+    border-radius: 8px;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Improved mobile responsiveness for new features */
+@media (max-width: 768px) {
+    .quick-presets .btn {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    .quick-presets .col-md-3 {
+        margin-bottom: 0.5rem;
+    }
+    
+    input[type="number"][data-filter] {
+        font-size: 0.9rem;
+    }
+    
+    .filter-tier {
+        padding: 1rem;
+    }
+    
+    .form-label.fw-bold {
+        font-size: 0.85rem;
+    }
+}

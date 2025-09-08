@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Select Data Type - {{ state_name }} Commercial Rate Insights{% endblock %}
+
+{% block extra_head %}
+<style>
+    .npi-selection-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem 0;
+    }
+    
+    .page-header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .page-header h1 {
+        color: #2c3e50;
+        margin-bottom: 1rem;
+    }
+    
+    .page-header p {
+        color: #6c757d;
+        font-size: 1.1rem;
+    }
+    
+    .npi-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .npi-option {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 3px solid transparent;
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    .npi-option:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    .npi-option.primary {
+        border-color: #007bff;
+    }
+    
+    .npi-option.primary:hover {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    }
+    
+    .npi-option.success {
+        border-color: #28a745;
+    }
+    
+    .npi-option.success:hover {
+        background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+    }
+    
+    .npi-option-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .npi-option-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-size: 1.5rem;
+        color: white;
+    }
+    
+    .npi-option-icon.primary {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+    }
+    
+    .npi-option-icon.success {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+    }
+    
+    .npi-option-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin: 0;
+        color: #2c3e50;
+    }
+    
+    .npi-option-description {
+        color: #6c757d;
+        line-height: 1.6;
+        margin: 0;
+    }
+    
+    .back-button {
+        text-align: center;
+        margin-top: 2rem;
+    }
+    
+    .back-button .btn {
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+    }
+    
+    .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .state-badge {
+        display: inline-block;
+        background: #007bff;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="npi-selection-container">
+        {% if has_data %}
+            <div class="page-header">
+                <div class="state-badge">{{ state_code }}</div>
+                <h1>Select Data Type</h1>
+                <p>Choose the type of commercial rate data you want to analyze for {{ state_name }}</p>
+            </div>
+            
+            <div class="npi-options">
+                {% for npi_type in available_npi_types %}
+                    <a href="{% url 'commercial_rate_insights_state' state_code=state_code %}?npi_type={{ npi_type }}" 
+                       class="npi-option {% if npi_type == 'NPI-1' %}success{% else %}primary{% endif %}">
+                        <div class="npi-option-header">
+                            <div class="npi-option-icon {% if npi_type == 'NPI-1' %}success{% else %}primary{% endif %}">
+                                {% if npi_type == 'NPI-1' %}
+                                    <i class="fas fa-user-md"></i>
+                                {% else %}
+                                    <i class="fas fa-hospital"></i>
+                                {% endif %}
+                            </div>
+                            <h3 class="npi-option-title">
+                                {% if npi_type == 'NPI-1' %}
+                                    Individual Provider Rates
+                                {% else %}
+                                    Organization Rates
+                                {% endif %}
+                            </h3>
+                        </div>
+                        <p class="npi-option-description">
+                            {% if npi_type == 'NPI-1' %}
+                                View rates at the individual provider level (doctors, specialists)
+                            {% else %}
+                                View rates at the organization level (hospitals, clinics, medical groups)
+                            {% endif %}
+                        </p>
+                    </a>
+                {% endfor %}
+            </div>
+            
+            <div class="back-button">
+                <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to State Map
+                </a>
+            </div>
+        {% else %}
+            <div class="page-header">
+                <div class="state-badge">{{ state_code }}</div>
+                <h1>Data Not Available</h1>
+                <p>{{ error_message|default:"Sorry, data is not available for this state." }}</p>
+            </div>
+            
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                {{ error_message|default:"Data files not found for this state." }}
+            </div>
+            
+            <div class="back-button">
+                <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to State Map
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click tracking for analytics
+    document.querySelectorAll('.npi-option').forEach(option => {
+        option.addEventListener('click', function(e) {
+            const npiType = this.href.split('npi_type=')[1];
+            console.log(`User selected NPI type: ${npiType} for state: {{ state_code }}`);
+        });
+    });
+});
+</script>
+{% endblock %}

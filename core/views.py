@@ -50,6 +50,57 @@ def commercial_rate_insights_map(request):
 
 
 @login_required
+def npi_type_selection(request, state_code):
+    """
+    NPI Type Selection Page
+    Allows users to choose between NPI-1 (Organization) or NPI-2 (Individual Provider) data
+    """
+    try:
+        # Validate state code
+        state_code = state_code.upper()
+        available_states = ParquetDataManager.get_available_states()
+        
+        if state_code not in available_states or available_states[state_code] != 'available':
+            context = {
+                'has_data': False,
+                'error_message': f'Sorry, {state_code} data is not available yet. Please try another state.',
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            return render(request, 'core/npi_type_selection.html', context)
+        
+        # Get available NPI types for this state
+        available_npi_types = ParquetDataManager.get_available_npi_types(state_code)
+        
+        if not available_npi_types:
+            context = {
+                'has_data': False,
+                'error_message': f'No data files found for {state_code}. Please try another state.',
+                'state_code': state_code,
+                'state_name': ParquetDataManager.get_state_name(state_code)
+            }
+            return render(request, 'core/npi_type_selection.html', context)
+        
+        context = {
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code),
+            'available_npi_types': available_npi_types,
+            'has_data': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in npi_type_selection view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading the NPI selection page.',
+            'state_code': state_code,
+            'state_name': ParquetDataManager.get_state_name(state_code) if 'state_code' in locals() else 'Unknown'
+        }
+    
+    return render(request, 'core/npi_type_selection.html', context)
+
+
+@login_required
 def commercial_rate_insights_state(request, state_code):
     """
     State-specific Commercial Rate Insights Dashboard
@@ -69,9 +120,12 @@ def commercial_rate_insights_state(request, state_code):
             }
             return render(request, 'core/commercial_rate_insights_state.html', context)
         
-        # Initialize data manager with state-specific file
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager with state-specific file and NPI type
         try:
-            data_manager = ParquetDataManager(state=state_code)
+            data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
             if not data_manager.has_data:
                 logger.error(f"Data file not found for {state_code}")
                 context = {
@@ -91,46 +145,43 @@ def commercial_rate_insights_state(request, state_code):
             }
             return render(request, 'core/commercial_rate_insights_state.html', context)
         
-        # Get active filters from request
+        # Get active filters from request - simplified to core fields only
         active_filters = {
             'payer': request.GET.getlist('payer'),
-            'org_name': request.GET.getlist('org_name'),
             'procedure_set': request.GET.getlist('procedure_set'),
             'procedure_class': request.GET.getlist('procedure_class'),
             'procedure_group': request.GET.getlist('procedure_group'),
-            'cbsa': request.GET.getlist('cbsa'),
-            'billing_code': request.GET.getlist('billing_code'),
+            'org_name': request.GET.getlist('org_name'),
             'tin_value': request.GET.getlist('tin_value'),
-            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
-            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
+            'billing_code': request.GET.getlist('billing_code')
         }
         
         # Remove empty filters
         active_filters = {k: v for k, v in active_filters.items() if v}
         
         # Create cache key based on state and filters using improved method
-        cache_key = ParquetDataManager.generate_cache_key(state_code, active_filters)
+        cache_key = ParquetDataManager.generate_cache_key(state_code, active_filters, npi_type)
         
         # Try to get cached data first
         cached_data = cache.get(cache_key)
         if cached_data:
             logger.info(f"Using cached data for {state_code}")
             context = cached_data
+            # Add NPI type to cached context if not present
+            if 'npi_type' not in context:
+                context['npi_type'] = npi_type
             # Extract filters from cached context for logging
             filters = context.get('filters', {})
         else:
-            # Get filtered options for each field based on current selections
+            # Get filtered options for each field based on current selections - simplified to core fields only
             filters = {
                 'payers': data_manager.get_unique_values('payer', active_filters),
-                'organizations': data_manager.get_unique_values('org_name', active_filters),
                 'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
                 'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
                 'procedure_groups': data_manager.get_unique_values('procedure_group', active_filters),
-                'cbsa_regions': data_manager.get_unique_values('cbsa', active_filters),
-                'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+                'organizations': data_manager.get_unique_values('org_name', active_filters),
                 'tin_values': data_manager.get_unique_values('tin_value', active_filters),
-                'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_filters),
-                'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_filters),
+                'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
             }
             
             # Get aggregated statistics with filters
@@ -150,7 +201,8 @@ def commercial_rate_insights_state(request, state_code):
                 'sample_records': sample_records,
                 'has_data': True,
                 'state_code': state_code,
-                'state_name': ParquetDataManager.get_state_name(state_code)
+                'state_name': ParquetDataManager.get_state_name(state_code),
+                'npi_type': npi_type
             }
             
             # Cache the data for 5 minutes
@@ -170,7 +222,7 @@ def commercial_rate_insights_state(request, state_code):
         
         # Clear any corrupted cache entries
         try:
-            cache_key = ParquetDataManager.generate_cache_key(state_code, {})
+            cache_key = ParquetDataManager.generate_cache_key(state_code, {}, npi_type)
             cache.delete(cache_key)
             logger.info(f"Cleared corrupted cache for {state_code}")
         except:
@@ -222,21 +274,21 @@ def commercial_rate_insights_compare(request, state_code):
             }
             return render(request, 'core/commercial_rate_insights_compare.html', context)
         
-        # Initialize data manager with state-specific file
-        data_manager = ParquetDataManager(state=state_code)
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
         
-        # Get active filters from request
+        # Initialize data manager with state-specific file and NPI type
+        data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
+        
+        # Get active filters from request - simplified to core fields only
         active_filters = {
             'payer': request.GET.getlist('payer'),
-            'org_name': request.GET.getlist('org_name'),
             'procedure_set': request.GET.getlist('procedure_set'),
             'procedure_class': request.GET.getlist('procedure_class'),
             'procedure_group': request.GET.getlist('procedure_group'),
-            'cbsa': request.GET.getlist('cbsa'),
-            'billing_code': request.GET.getlist('billing_code'),
+            'org_name': request.GET.getlist('org_name'),
             'tin_value': request.GET.getlist('tin_value'),
-            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
-            'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc')
+            'billing_code': request.GET.getlist('billing_code')
         }
         
         # Remove empty filters
@@ -312,8 +364,11 @@ def custom_network_analysis(request, state_code):
             }
             return render(request, 'core/custom_network_analysis.html', context)
         
-        # Initialize data manager with state-specific file
-        data_manager = ParquetDataManager(state=state_code)
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager with state-specific file and NPI type
+        data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
         
         # Handle file upload
         custom_tins = []
@@ -476,8 +531,11 @@ def commercial_rate_insights_overview(request, state_code):
             }
             return render(request, 'core/commercial_rate_insights_overview.html', context)
         
-        # Initialize data manager with state-specific file
-        data_manager = ParquetDataManager(state=state_code)
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager with state-specific file and NPI type
+        data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
         logger.info(f"Data manager initialized with file: {data_manager.file_path}")
         logger.info(f"Data manager has_data: {data_manager.has_data}")
         
@@ -523,7 +581,8 @@ def commercial_rate_insights_overview(request, state_code):
             'sample_records': sample_records,
             'has_data': True,
             'state_code': state_code,
-            'state_name': ParquetDataManager.get_state_name(state_code)
+            'state_name': ParquetDataManager.get_state_name(state_code),
+            'npi_type': npi_type
         }
         
         # Debug logging
@@ -571,9 +630,12 @@ def commercial_rate_insights_overview_simple(request, state_code):
             }
             return render(request, 'core/commercial_rate_insights_overview_simple.html', context)
         
-        # Initialize data manager with state-specific file
-        logger.info(f"Initializing data manager for {state_code}")
-        data_manager = ParquetDataManager(state=state_code)
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager with state-specific file and NPI type
+        logger.info(f"Initializing data manager for {state_code} with NPI type: {npi_type}")
+        data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
         logger.info(f"Data manager has_data: {data_manager.has_data}")
         
         # Get overview statistics without any prefilters
@@ -591,7 +653,8 @@ def commercial_rate_insights_overview_simple(request, state_code):
             'state_code': state_code,
             'state_name': ParquetDataManager.get_state_name(state_code),
             'overview_stats': overview_stats,
-            'sample_records': sample_records
+            'sample_records': sample_records,
+            'npi_type': npi_type
         }
         
         logger.info("Context prepared successfully")
@@ -624,8 +687,11 @@ def api_filter_options(request, state_code):
         if state_code not in available_states or available_states[state_code] != 'available':
             return JsonResponse({'error': 'State not available'}, status=404)
         
-        # Initialize data manager with state-specific file
-        data_manager = ParquetDataManager(state=state_code)
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager with state-specific file and NPI type
+        data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
         
         # Get filter options without any active filters
         filters = {
@@ -662,8 +728,11 @@ def api_sample_data(request, state_code):
         if state_code not in available_states or available_states[state_code] != 'available':
             return JsonResponse({'error': 'State not available'}, status=404)
         
-        # Initialize data manager with state-specific file
-        data_manager = ParquetDataManager(state=state_code)
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager with state-specific file and NPI type
+        data_manager = ParquetDataManager(state=state_code, npi_type=npi_type)
         
         # Get sample data for charts
         sample_records = data_manager.get_sample_records({}, limit=50)

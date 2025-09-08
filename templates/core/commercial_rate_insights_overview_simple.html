@@ -18,7 +18,18 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
                             <h4 class="mb-0">{{ state_name }} Data Overview</h4>
-                            <p class="text-muted mb-0">State Code: {{ state_code }} • Dataset Statistics</p>
+                            <p class="text-muted mb-0">
+                                State Code: {{ state_code }}
+                                {% if npi_type %}
+                                    | Data Type: 
+                                    {% if npi_type == 'NPI-1' %}
+                                        <span class="badge bg-success">Individual Provider Rates</span>
+                                    {% else %}
+                                        <span class="badge bg-primary">Organization Rates</span>
+                                    {% endif %}
+                                {% endif %}
+                                • Dataset Statistics
+                            </p>
                         </div>
                         <div class="d-flex gap-2">
                             <button class="btn instructions-btn" data-bs-toggle="modal" data-bs-target="#instructionsModal">
@@ -44,7 +55,7 @@
                         <p class="text-muted mb-4">
                             View detailed analytics, filtering options, and interactive visualizations for {{ state_name }}
                         </p>
-                        <button id="proceedButton" class="btn proceed-button btn-primary btn-lg" data-state="{{ state_code }}" data-state-name="{{ state_name }}">
+                        <button id="proceedButton" class="btn proceed-button btn-primary btn-lg" data-state="{{ state_code }}" data-state-name="{{ state_name }}" data-npi-type="{{ npi_type }}">
                             <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                             <i class="fas fa-arrow-right me-2"></i>Proceed to Insights
                         </button>

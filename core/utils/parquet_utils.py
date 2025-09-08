@@ -16,16 +16,24 @@ class ParquetDataManager:
     _connection_pool = {}
     _pool_lock = threading.Lock()
     
-    def __init__(self, file_path: Optional[str] = None, state: Optional[str] = None):
+    def __init__(self, file_path: Optional[str] = None, state: Optional[str] = None, npi_type: Optional[str] = None):
         if file_path:
             self.file_path = file_path
         elif state:
-            # State-specific file
-            self.file_path = os.path.join(
-                Path(__file__).resolve().parent.parent,
-                'data',
-                f'commercial_rates_{state.upper()}.parquet'
-            )
+            # State-specific file with optional NPI type
+            if npi_type:
+                self.file_path = os.path.join(
+                    Path(__file__).resolve().parent.parent,
+                    'data',
+                    f'commercial_rates_{state.upper()}_{npi_type}.parquet'
+                )
+            else:
+                # Fallback to original naming for backward compatibility
+                self.file_path = os.path.join(
+                    Path(__file__).resolve().parent.parent,
+                    'data',
+                    f'commercial_rates_{state.upper()}.parquet'
+                )
         else:
             # Default file
             self.file_path = os.path.join(
@@ -101,7 +109,7 @@ class ParquetDataManager:
             logger.info("Cleaned up all database connections")
     
     @staticmethod
-    def generate_cache_key(state_code: str, filters: Dict[str, Any]) -> str:
+    def generate_cache_key(state_code: str, filters: Dict[str, Any], npi_type: Optional[str] = None) -> str:
         """Generate a consistent cache key for filters"""
         # Sort filters to ensure consistent ordering
         sorted_filters = {}
@@ -116,13 +124,16 @@ class ParquetDataManager:
         filter_str = json.dumps(sorted_filters, sort_keys=True)
         filter_hash = hashlib.md5(filter_str.encode()).hexdigest()
         
-        return f"insights_{state_code}_{filter_hash}"
+        # Include NPI type in cache key if provided
+        npi_suffix = f"_{npi_type}" if npi_type else ""
+        return f"insights_{state_code}{npi_suffix}_{filter_hash}"
 
     @staticmethod
     def get_available_states() -> Dict[str, str]:
         """
         Scan the data folder for available state parquet files.
         Returns a dict with state codes as keys and status as values.
+        Checks for both NPI-1 and NPI-2 files.
         """
         data_folder = os.path.join(
             Path(__file__).resolve().parent.parent,
@@ -143,16 +154,53 @@ class ParquetDataManager:
             'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
         }
         
-        # Scan for available state files
+        # Scan for available state files (check for both NPI-1 and NPI-2 files)
         available_states = {}
         for state_code in all_states.keys():
-            state_file = os.path.join(data_folder, f'commercial_rates_{state_code}.parquet')
-            if os.path.exists(state_file):
+            # Check for NPI-1 file
+            npi1_file = os.path.join(data_folder, f'commercial_rates_{state_code}_NPI-1.parquet')
+            # Check for NPI-2 file
+            npi2_file = os.path.join(data_folder, f'commercial_rates_{state_code}_NPI-2.parquet')
+            # Check for legacy file (backward compatibility)
+            legacy_file = os.path.join(data_folder, f'commercial_rates_{state_code}.parquet')
+            
+            if os.path.exists(npi1_file) or os.path.exists(npi2_file) or os.path.exists(legacy_file):
                 available_states[state_code] = 'available'
             else:
                 available_states[state_code] = 'not_ready'
         
         return available_states
+
+    @staticmethod
+    def get_available_npi_types(state_code: str) -> List[str]:
+        """
+        Get available NPI types for a specific state.
+        Returns a list of available NPI types (e.g., ['NPI-1', 'NPI-2']).
+        """
+        data_folder = os.path.join(
+            Path(__file__).resolve().parent.parent,
+            'data'
+        )
+        
+        available_npi_types = []
+        
+        # Check for NPI-1 file
+        npi1_file = os.path.join(data_folder, f'commercial_rates_{state_code.upper()}_NPI-1.parquet')
+        if os.path.exists(npi1_file):
+            available_npi_types.append('NPI-1')
+        
+        # Check for NPI-2 file
+        npi2_file = os.path.join(data_folder, f'commercial_rates_{state_code.upper()}_NPI-2.parquet')
+        if os.path.exists(npi2_file):
+            available_npi_types.append('NPI-2')
+        
+        # Check for legacy file (backward compatibility)
+        legacy_file = os.path.join(data_folder, f'commercial_rates_{state_code.upper()}.parquet')
+        if os.path.exists(legacy_file) and not available_npi_types:
+            # If only legacy file exists, treat it as NPI-1 for backward compatibility
+            available_npi_types.append('NPI-1')
+        
+        return available_npi_types
 
     @staticmethod
     def get_state_name(state_code: str) -> str:
@@ -199,6 +247,15 @@ class ParquetDataManager:
             'GA_ASC_MAR': np.random.uniform(300, 3000, n_records),
             'medicare_opps_mar_stateavg': np.random.uniform(150, 1500, n_records),
             'medicare_asc_mar_stateavg': np.random.uniform(250, 2500, n_records),
+            # New fields for enhanced filtering
+            'city': np.random.choice(['Atlanta', 'Savannah', 'Augusta', 'Columbus', 'Macon'], n_records),
+            'state': np.random.choice(['GA', 'FL', 'SC', 'NC', 'TN'], n_records),
+            'postal_code': np.random.choice(['30309', '31401', '30901', '31901', '31201'], n_records),
+            'prov_npi': [f"{np.random.randint(1000000000, 9999999999)}" for _ in range(n_records)],
+            'tin_type': np.random.choice(['EIN', 'SSN', 'Other'], n_records),
+            'negotiated_type': np.random.choice(['negotiated', 'non-negotiated', 'fee-for-service'], n_records),
+            'payer_type': np.random.choice(['commercial', 'medicare', 'medicaid', 'other'], n_records),
+            'status': np.random.choice(['active', 'inactive', 'pending'], n_records),
         })
         
         return sample_data
@@ -209,7 +266,22 @@ class ParquetDataManager:
         if filters:
             for col, val in filters.items():
                 if val and val != '':
-                    if isinstance(val, list):
+                    # Handle range filters
+                    if col.endswith('_min'):
+                        base_col = col[:-4]  # Remove '_min' suffix
+                        try:
+                            min_val = float(val)
+                            where_clauses.append(f"{base_col} >= {min_val}")
+                        except (ValueError, TypeError):
+                            continue
+                    elif col.endswith('_max'):
+                        base_col = col[:-4]  # Remove '_max' suffix
+                        try:
+                            max_val = float(val)
+                            where_clauses.append(f"{base_col} <= {max_val}")
+                        except (ValueError, TypeError):
+                            continue
+                    elif isinstance(val, list):
                         # Handle multiple values with IN clause
                         if val:  # Check if list is not empty
                             values = [f"'{v}'" for v in val if v]  # Filter out empty values
@@ -256,6 +328,9 @@ class ParquetDataManager:
                     'professional': {'avg_rate': 0, 'ga_prof_mar': 0, 'ga_prof_pct': 0, 'medicare_prof_mar': 0, 'medicare_prof_pct': 0, 'record_count': 0},
                     'facility': {'avg_rate': 0, 'ga_op_mar': 0, 'ga_op_pct': 0, 'ga_asc_mar': 0, 'ga_asc_pct': 0, 'medicare_op_mar_stateavg': 0, 'medicare_op_pct': 0, 'medicare_asc_mar_stateavg': 0, 'medicare_asc_pct': 0, 'record_count': 0}
                 }
+            
+            # Check if this is NPI-1 data (individual providers) - no facility rates
+            is_npi1 = 'NPI-1' in self.file_path
             
             # Build WHERE clause from filters
             where_sql = self.build_where_clause(filters or {})
@@ -309,22 +384,25 @@ class ParquetDataManager:
             if prof_rates and prof_medicare:
                 prof_medicare_pct = (avg_prof_rate / avg_prof_medicare) * 100 if avg_prof_medicare > 0 else 0
             
-            # Facility rates (billing_class = 'institutional')
-            facility_query = f"""
-                SELECT 
-                    rate,
-                    GA_OP_MAR,
-                    GA_ASC_MAR,
-                    medicare_opps_mar_stateavg,
-                    medicare_asc_mar_stateavg,
-                    primary_taxonomy_desc
-                FROM commercial_rates
-                WHERE {where_sql}
-                AND billing_class = 'institutional'
-                AND rate IS NOT NULL
-            """
-            
-            facility_data = con.execute(facility_query).fetchall()
+            # Facility rates (billing_class = 'institutional') - skip for NPI-1
+            if is_npi1:
+                facility_data = []
+            else:
+                facility_query = f"""
+                    SELECT 
+                        rate,
+                        GA_OP_MAR,
+                        GA_ASC_MAR,
+                        medicare_opps_mar_stateavg,
+                        medicare_asc_mar_stateavg,
+                        primary_taxonomy_desc
+                    FROM commercial_rates
+                    WHERE {where_sql}
+                    AND billing_class = 'institutional'
+                    AND rate IS NOT NULL
+                """
+                
+                facility_data = con.execute(facility_query).fetchall()
             
             # Calculate facility statistics
             facility_rates = []
@@ -625,6 +703,9 @@ class ParquetDataManager:
                 sample_df = self._get_sample_data()
                 con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
             
+            # Check if this is NPI-1 data (individual providers) - no facility rates
+            is_npi1 = 'NPI-1' in self.file_path
+            
             # Apply filters if provided
             where_clause = self.build_where_clause(filters) if filters else "1=1"
             
@@ -654,65 +735,71 @@ class ParquetDataManager:
                 if billing_class == 'professional':
                     stats['professional']['record_count'] = int(row[1])
                     stats['professional']['avg_rate'] = float(row[2]) if row[2] else 0
-                elif billing_class == 'institutional':
+                elif billing_class == 'institutional' and not is_npi1:
                     stats['facility']['record_count'] = int(row[1])
                     stats['facility']['avg_rate'] = float(row[2]) if row[2] else 0
             
-            # Get actual GA WCFS OP MAR data with Hospital taxonomy filter
-            ga_op_query = f"""
-                SELECT 
-                    AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar_avg
-                FROM commercial_rates
-                WHERE {where_clause}
-                AND billing_class = 'institutional'
-                AND primary_taxonomy_desc LIKE '%Hospital%'
-                AND ga_op_mar IS NOT NULL
-            """
-            
-            ga_op_result = con.execute(ga_op_query).fetchone()
-            ga_op_mar_avg = float(ga_op_result[0]) if ga_op_result and ga_op_result[0] else 0
-            
-            # Get actual GA WCFS ASC MAR data excluding Hospital taxonomy
-            ga_asc_query = f"""
-                SELECT 
-                    AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar_avg
-                FROM commercial_rates
-                WHERE {where_clause}
-                AND billing_class = 'institutional'
-                AND primary_taxonomy_desc NOT LIKE '%Hospital%'
-                AND ga_asc_mar IS NOT NULL
-            """
-            
-            ga_asc_result = con.execute(ga_asc_query).fetchone()
-            ga_asc_mar_avg = float(ga_asc_result[0]) if ga_asc_result and ga_asc_result[0] else 0
-            
-            # Get actual Medicare OP MAR data with Hospital taxonomy filter
-            medicare_op_query = f"""
-                SELECT 
-                    AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar_avg
-                FROM commercial_rates
-                WHERE {where_clause}
-                AND billing_class = 'institutional'
-                AND primary_taxonomy_desc LIKE '%Hospital%'
-                AND medicare_op_mar IS NOT NULL
-            """
-            
-            medicare_op_result = con.execute(medicare_op_query).fetchone()
-            medicare_op_mar_avg = float(medicare_op_result[0]) if medicare_op_result and medicare_op_result[0] else 0
-            
-            # Get actual Medicare ASC MAR data excluding Hospital taxonomy
-            medicare_asc_query = f"""
-                SELECT 
-                    AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar_avg
-                FROM commercial_rates
-                WHERE {where_clause}
-                AND billing_class = 'institutional'
-                AND primary_taxonomy_desc NOT LIKE '%Hospital%'
-                AND medicare_asc_mar IS NOT NULL
-            """
-            
-            medicare_asc_result = con.execute(medicare_asc_query).fetchone()
-            medicare_asc_mar_avg = float(medicare_asc_result[0]) if medicare_asc_result and medicare_asc_result[0] else 0
+            # Get actual GA WCFS OP MAR data with Hospital taxonomy filter (skip for NPI-1)
+            if is_npi1:
+                ga_op_mar_avg = 0
+                ga_asc_mar_avg = 0
+                medicare_op_mar_avg = 0
+                medicare_asc_mar_avg = 0
+            else:
+                ga_op_query = f"""
+                    SELECT 
+                        AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar_avg
+                    FROM commercial_rates
+                    WHERE {where_clause}
+                    AND billing_class = 'institutional'
+                    AND primary_taxonomy_desc LIKE '%Hospital%'
+                    AND ga_op_mar IS NOT NULL
+                """
+                
+                ga_op_result = con.execute(ga_op_query).fetchone()
+                ga_op_mar_avg = float(ga_op_result[0]) if ga_op_result and ga_op_result[0] else 0
+                
+                # Get actual GA WCFS ASC MAR data excluding Hospital taxonomy
+                ga_asc_query = f"""
+                    SELECT 
+                        AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar_avg
+                    FROM commercial_rates
+                    WHERE {where_clause}
+                    AND billing_class = 'institutional'
+                    AND primary_taxonomy_desc NOT LIKE '%Hospital%'
+                    AND ga_asc_mar IS NOT NULL
+                """
+                
+                ga_asc_result = con.execute(ga_asc_query).fetchone()
+                ga_asc_mar_avg = float(ga_asc_result[0]) if ga_asc_result and ga_asc_result[0] else 0
+                
+                # Get actual Medicare OP MAR data with Hospital taxonomy filter
+                medicare_op_query = f"""
+                    SELECT 
+                        AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar_avg
+                    FROM commercial_rates
+                    WHERE {where_clause}
+                    AND billing_class = 'institutional'
+                    AND primary_taxonomy_desc LIKE '%Hospital%'
+                    AND medicare_op_mar IS NOT NULL
+                """
+                
+                medicare_op_result = con.execute(medicare_op_query).fetchone()
+                medicare_op_mar_avg = float(medicare_op_result[0]) if medicare_op_result and medicare_op_result[0] else 0
+                
+                # Get actual Medicare ASC MAR data excluding Hospital taxonomy
+                medicare_asc_query = f"""
+                    SELECT 
+                        AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar_avg
+                    FROM commercial_rates
+                    WHERE {where_clause}
+                    AND billing_class = 'institutional'
+                    AND primary_taxonomy_desc NOT LIKE '%Hospital%'
+                    AND medicare_asc_mar IS NOT NULL
+                """
+                
+                medicare_asc_result = con.execute(medicare_asc_query).fetchone()
+                medicare_asc_mar_avg = float(medicare_asc_result[0]) if medicare_asc_result and medicare_asc_result[0] else 0
             
             # Calculate percentages and margins (simplified for now)
             stats['professional']['ga_prof_pct'] = 85.0  # Placeholder
@@ -720,14 +807,15 @@ class ParquetDataManager:
             stats['professional']['ga_prof_mar'] = 15.0  # Placeholder
             stats['professional']['medicare_prof_mar'] = 20.0  # Placeholder
             
-            stats['facility']['ga_op_pct'] = 90.0  # Placeholder
-            stats['facility']['ga_asc_pct'] = 95.0  # Placeholder
-            stats['facility']['medicare_op_pct'] = 110.0  # Placeholder
-            stats['facility']['medicare_asc_pct'] = 105.0  # Placeholder
-            stats['facility']['ga_op_mar'] = ga_op_mar_avg  # Actual calculated value with Hospital filter
-            stats['facility']['ga_asc_mar'] = ga_asc_mar_avg  # Actual calculated value excluding Hospital
-            stats['facility']['medicare_op_mar'] = medicare_op_mar_avg  # Actual calculated value with Hospital filter
-            stats['facility']['medicare_asc_mar'] = medicare_asc_mar_avg  # Actual calculated value excluding Hospital
+            if not is_npi1:
+                stats['facility']['ga_op_pct'] = 90.0  # Placeholder
+                stats['facility']['ga_asc_pct'] = 95.0  # Placeholder
+                stats['facility']['medicare_op_pct'] = 110.0  # Placeholder
+                stats['facility']['medicare_asc_pct'] = 105.0  # Placeholder
+                stats['facility']['ga_op_mar'] = ga_op_mar_avg  # Actual calculated value with Hospital filter
+                stats['facility']['ga_asc_mar'] = ga_asc_mar_avg  # Actual calculated value excluding Hospital
+                stats['facility']['medicare_op_mar'] = medicare_op_mar_avg  # Actual calculated value with Hospital filter
+                stats['facility']['medicare_asc_mar'] = medicare_asc_mar_avg  # Actual calculated value excluding Hospital
             
             return stats
             
@@ -750,6 +838,9 @@ class ParquetDataManager:
                 sample_df = self._get_sample_data()
                 con.execute("CREATE TABLE commercial_rates AS SELECT * FROM sample_df", {"sample_df": sample_df})
             
+            # Check if this is NPI-1 data (individual providers) - no facility rates
+            is_npi1 = 'NPI-1' in self.file_path
+            
             # Apply filters if provided
             where_clause = self.build_where_clause(filters) if filters else "1=1"
             
@@ -771,21 +862,24 @@ class ParquetDataManager:
                         WHERE {org_where} AND procedure_class = 'Professional'
                     """
                     
-                    # Get facility rates
-                    fac_query = f"""
-                        SELECT 
-                            COUNT(*) as record_count,
-                            AVG(rate) as avg_rate,
-                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar,
-                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar,
-                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar,
-                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar
-                        FROM commercial_rates
-                        WHERE {org_where} AND procedure_class = 'Facility'
-                    """
+                    # Get facility rates (skip for NPI-1)
+                    if is_npi1:
+                        fac_result = None
+                    else:
+                        fac_query = f"""
+                            SELECT 
+                                COUNT(*) as record_count,
+                                AVG(rate) as avg_rate,
+                                AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar,
+                                AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar,
+                                AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar,
+                                AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar
+                            FROM commercial_rates
+                            WHERE {org_where} AND procedure_class = 'Facility'
+                        """
+                        fac_result = con.execute(fac_query).fetchone()
                     
                     prof_result = con.execute(prof_query).fetchone()
-                    fac_result = con.execute(fac_query).fetchone()
                     
                     if prof_result or fac_result:
                         comparison_data.append({
@@ -831,21 +925,24 @@ class ParquetDataManager:
                         WHERE {payer_where} AND procedure_class = 'Professional'
                     """
                     
-                    # Get facility rates
-                    fac_query = f"""
-                        SELECT 
-                            COUNT(*) as record_count,
-                            AVG(rate) as avg_rate,
-                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar,
-                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar,
-                            AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar,
-                            AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar
-                        FROM commercial_rates
-                        WHERE {payer_where} AND procedure_class = 'Facility'
-                    """
+                    # Get facility rates (skip for NPI-1)
+                    if is_npi1:
+                        fac_result = None
+                    else:
+                        fac_query = f"""
+                            SELECT 
+                                COUNT(*) as record_count,
+                                AVG(rate) as avg_rate,
+                                AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN ga_op_mar END) as ga_op_mar,
+                                AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN ga_asc_mar END) as ga_asc_mar,
+                                AVG(CASE WHEN primary_taxonomy_desc LIKE '%Hospital%' THEN medicare_op_mar END) as medicare_op_mar,
+                                AVG(CASE WHEN primary_taxonomy_desc NOT LIKE '%Hospital%' THEN medicare_asc_mar END) as medicare_asc_mar
+                            FROM commercial_rates
+                            WHERE {payer_where} AND procedure_class = 'Facility'
+                        """
+                        fac_result = con.execute(fac_query).fetchone()
                     
                     prof_result = con.execute(prof_query).fetchone()
-                    fac_result = con.execute(fac_query).fetchone()
                     
                     if prof_result or fac_result:
                         comparison_data.append({
