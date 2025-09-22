@@ -342,7 +342,7 @@
         {% if has_data %}
             <!-- Dataset Summary -->
             <div class="row mb-4">
-                <div class="col-md-3">
+                <div class="col-md-6">
                     <div class="card text-center">
                         <div class="card-body">
                             <h3 class="text-primary">{{ combined_df_info.shape.0|intcomma }}</h3>
@@ -350,23 +350,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h3 class="text-success">{{ combined_df_info.shape.1 }}</h3>
-                            <p class="card-text">Columns</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h3 class="text-info">{{ combined_df_info.memory_usage_mb|floatformat:1 }} MB</h3>
-                            <p class="card-text">Memory Usage</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
+                <div class="col-md-6">
                     <div class="card text-center">
                         <div class="card-body">
                             <h3 class="text-warning">{{ total_partitions }}</h3>
@@ -402,6 +386,22 @@
                                                                         <th>Value</th>
                                                                         <th>Records</th>
                                                                         <th>Avg Rate</th>
+                                                                        {% if filters.billing_class == 'professional' %}
+                                                                        <th>Medicare Professional</th>
+                                                                        <th>% of Medicare Prof</th>
+                                                                        {% elif filters.billing_class == 'institutional' %}
+                                                                        <th>Medicare ASC</th>
+                                                                        <th>% of Medicare ASC</th>
+                                                                        <th>Medicare OPPS</th>
+                                                                        <th>% of Medicare OPPS</th>
+                                                                        {% else %}
+                                                                        <th>Medicare Professional</th>
+                                                                        <th>% of Medicare Prof</th>
+                                                                        <th>Medicare ASC</th>
+                                                                        <th>% of Medicare ASC</th>
+                                                                        <th>Medicare OPPS</th>
+                                                                        <th>% of Medicare OPPS</th>
+                                                                        {% endif %}
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -422,6 +422,94 @@
                                                                                     <span class="text-muted">-</span>
                                                                                 {% endif %}
                                                                             </td>
+                                                                            {% if filters.billing_class == 'professional' %}
+                                                                            <td>
+                                                                                {% if item.avg_medicare_professional_rate %}
+                                                                                    <span class="text-primary fw-bold">${{ item.avg_medicare_professional_rate|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate_pct_of_medicare_professional %}
+                                                                                    <span class="text-warning fw-bold">{{ item.avg_negotiated_rate_pct_of_medicare_professional|floatformat:1 }}%</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            {% elif filters.billing_class == 'institutional' %}
+                                                                            <td>
+                                                                                {% if item.avg_medicare_asc_stateavg %}
+                                                                                    <span class="text-info fw-bold">${{ item.avg_medicare_asc_stateavg|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate_pct_of_medicare_asc %}
+                                                                                    <span class="text-warning fw-bold">{{ item.avg_negotiated_rate_pct_of_medicare_asc|floatformat:1 }}%</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_medicare_opps_stateavg %}
+                                                                                    <span class="text-info fw-bold">${{ item.avg_medicare_opps_stateavg|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate_pct_of_medicare_opps %}
+                                                                                    <span class="text-warning fw-bold">{{ item.avg_negotiated_rate_pct_of_medicare_opps|floatformat:1 }}%</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            {% else %}
+                                                                            <td>
+                                                                                {% if item.avg_medicare_professional_rate %}
+                                                                                    <span class="text-primary fw-bold">${{ item.avg_medicare_professional_rate|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate_pct_of_medicare_professional %}
+                                                                                    <span class="text-warning fw-bold">{{ item.avg_negotiated_rate_pct_of_medicare_professional|floatformat:1 }}%</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_medicare_asc_stateavg %}
+                                                                                    <span class="text-info fw-bold">${{ item.avg_medicare_asc_stateavg|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate_pct_of_medicare_asc %}
+                                                                                    <span class="text-warning fw-bold">{{ item.avg_negotiated_rate_pct_of_medicare_asc|floatformat:1 }}%</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_medicare_opps_stateavg %}
+                                                                                    <span class="text-info fw-bold">${{ item.avg_medicare_opps_stateavg|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate_pct_of_medicare_opps %}
+                                                                                    <span class="text-warning fw-bold">{{ item.avg_negotiated_rate_pct_of_medicare_opps|floatformat:1 }}%</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                            {% endif %}
                                                                         </tr>
                                                                     {% endfor %}
                                                                 </tbody>
@@ -620,8 +708,6 @@
                                                 <h6>Basic Information</h6>
                                                 <ul class="list-unstyled">
                                                     <li><strong>Total Rows:</strong> {{ analysis.dataset_summary.total_rows|intcomma }}</li>
-                                                    <li><strong>Total Columns:</strong> {{ analysis.dataset_summary.total_columns }}</li>
-                                                    <li><strong>Memory Usage:</strong> {{ analysis.dataset_summary.memory_usage_mb|floatformat:2 }} MB</li>
                                                 </ul>
                                             </div>
                                             <div class="col-md-6">
@@ -825,6 +911,20 @@
                                                                 <td>
                                                                     {% if value is None %}
                                                                         <span class="text-muted">-</span>
+                                                                    {% elif key == 'negotiated_rate' and value %}
+                                                                        <span class="text-success fw-bold">${{ value|floatformat:2 }}</span>
+                                                                    {% elif key == 'medicare_professional_rate' and value %}
+                                                                        <span class="text-primary fw-bold">${{ value|floatformat:2 }}</span>
+                                                                    {% elif key == 'medicare_asc_stateavg' and value %}
+                                                                        <span class="text-info fw-bold">${{ value|floatformat:2 }}</span>
+                                                                    {% elif key == 'medicare_opps_stateavg' and value %}
+                                                                        <span class="text-info fw-bold">${{ value|floatformat:2 }}</span>
+                                                                    {% elif key == 'negotiated_rate_pct_of_medicare_professional' and value %}
+                                                                        <span class="text-warning fw-bold">{{ value|floatformat:1 }}%</span>
+                                                                    {% elif key == 'negotiated_rate_pct_of_medicare_asc' and value %}
+                                                                        <span class="text-warning fw-bold">{{ value|floatformat:1 }}%</span>
+                                                                    {% elif key == 'negotiated_rate_pct_of_medicare_opps' and value %}
+                                                                        <span class="text-warning fw-bold">{{ value|floatformat:1 }}%</span>
                                                                     {% elif key == 'rate' and value %}
                                                                         ${{ value|floatformat:2 }}
                                                                     {% else %}

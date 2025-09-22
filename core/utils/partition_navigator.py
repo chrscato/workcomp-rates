@@ -7,8 +7,16 @@ import logging
 from pathlib import Path
 from django.conf import settings
 import time
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Import Medicare benchmark lookup
+try:
+    from .medicare_benchmarks import MedicareBenchmarkLookup
+except ImportError:
+    logger.warning("MedicareBenchmarkLookup not available - benchmark calculations will be skipped")
+    MedicareBenchmarkLookup = None
 
 class PartitionNavigator:
     """
@@ -23,6 +31,16 @@ class PartitionNavigator:
         self.aws_region = aws_region or getattr(settings, 'AWS_DEFAULT_REGION', 'us-east-1')
         self.conn = None
         self.s3_client = None
+        
+        # Initialize Medicare benchmark lookup
+        self.medicare_lookup = None
+        if MedicareBenchmarkLookup:
+            try:
+                self.medicare_lookup = MedicareBenchmarkLookup()
+                logger.info("Medicare benchmark lookup initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Medicare benchmark lookup: {e}")
+                self.medicare_lookup = None
         
         # Hierarchical filter configuration
         self.required_filters = ['payer_slug', 'state', 'billing_class']
@@ -220,6 +238,201 @@ class PartitionNavigator:
         
         return pd.read_sql_query(query, conn, params=params)
     
+    def _extract_zip_code_5dig(self, matched_address: str) -> Optional[str]:
+        """Extract 5-digit ZIP code from matched_address field."""
+        if pd.isna(matched_address) or not matched_address:
+            return None
+        
+        # Convert to string and clean
+        address_str = str(matched_address).strip()
+        if not address_str:
+            return None
+        
+        # Extract first 5 digits from the string
+        import re
+        zip_match = re.search(r'\b(\d{5})\b', address_str)
+        if zip_match:
+            return zip_match.group(1)
+        
+        # Fallback: try to extract first 5 consecutive digits
+        digits = re.findall(r'\d', address_str)
+        if len(digits) >= 5:
+            return ''.join(digits[:5])
+        
+        return None
+    
+    def _convert_numpy_types(self, obj):
+        """Convert numpy types to native Python types for JSON serialization."""
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: self._convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_numpy_types(item) for item in obj]
+        return obj
+    
+    def _add_benchmark_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add Medicare benchmark columns to the DataFrame."""
+        if not self.medicare_lookup or df.empty:
+            return df
+        
+        logger.info(f"Adding Medicare benchmark columns to {len(df)} records")
+        start_time = time.time()
+        
+        # Initialize new columns with None
+        df['zip_code_5dig'] = None
+        df['medicare_professional_rate'] = None
+        df['medicare_asc_stateavg'] = None
+        df['medicare_opps_stateavg'] = None
+        df['negotiated_rate_pct_of_medicare_professional'] = None
+        df['negotiated_rate_pct_of_medicare_asc'] = None
+        df['negotiated_rate_pct_of_medicare_opps'] = None
+        
+        # Extract ZIP codes for all records
+        if 'matched_address' in df.columns:
+            df['zip_code_5dig'] = df['matched_address'].apply(self._extract_zip_code_5dig)
+        
+        # Get unique combinations for batch processing
+        unique_combinations = set()
+        
+        # Professional rate combinations (code + zip)
+        if 'code' in df.columns and 'zip_code_5dig' in df.columns:
+            prof_combinations = df[['code', 'zip_code_5dig']].dropna()
+            prof_combinations = prof_combinations.drop_duplicates()
+            for _, row in prof_combinations.iterrows():
+                if row['zip_code_5dig']:
+                    unique_combinations.add(('prof', row['code'], row['zip_code_5dig']))
+        
+        # Institutional rate combinations (code + state)
+        if 'code' in df.columns and 'state' in df.columns:
+            inst_combinations = df[['code', 'state']].dropna()
+            inst_combinations = inst_combinations.drop_duplicates()
+            for _, row in inst_combinations.iterrows():
+                if row['state']:
+                    unique_combinations.add(('inst', row['code'], row['state']))
+        
+        logger.info(f"Processing {len(unique_combinations)} unique combinations for benchmark lookups")
+        
+        # Batch process professional rates
+        prof_rates_cache = {}
+        inst_rates_cache = {}
+        
+        for combo_type, code, location in unique_combinations:
+            try:
+                if combo_type == 'prof':
+                    rate = self.medicare_lookup.get_professional_rate(code, location)
+                    prof_rates_cache[(code, location)] = rate
+                elif combo_type == 'inst':
+                    rates = self.medicare_lookup.get_institutional_rates(code, location)
+                    inst_rates_cache[(code, location)] = rates
+            except Exception as e:
+                logger.warning(f"Error getting benchmark rates for {code} in {location}: {e}")
+                if combo_type == 'prof':
+                    prof_rates_cache[(code, location)] = None
+                elif combo_type == 'inst':
+                    inst_rates_cache[(code, location)] = {'medicare_asc_stateavg': None, 'medicare_opps_stateavg': None}
+        
+        # Apply cached rates to DataFrame
+        def get_prof_rate(row):
+            if pd.isna(row['code']) or pd.isna(row['zip_code_5dig']):
+                return None
+            return prof_rates_cache.get((row['code'], row['zip_code_5dig']), None)
+        
+        def get_inst_rates(row):
+            if pd.isna(row['code']) or pd.isna(row['state']):
+                return {'medicare_asc_stateavg': None, 'medicare_opps_stateavg': None}
+            return inst_rates_cache.get((row['code'], row['state']), {'medicare_asc_stateavg': None, 'medicare_opps_stateavg': None})
+        
+        # Apply professional rates
+        df['medicare_professional_rate'] = df.apply(get_prof_rate, axis=1)
+        
+        # Apply institutional rates
+        inst_rates_series = df.apply(get_inst_rates, axis=1)
+        df['medicare_asc_stateavg'] = inst_rates_series.apply(lambda x: x['medicare_asc_stateavg'] if x else None)
+        df['medicare_opps_stateavg'] = inst_rates_series.apply(lambda x: x['medicare_opps_stateavg'] if x else None)
+        
+        # Calculate benchmark percentages
+        def calculate_prof_pct(row):
+            if pd.isna(row['negotiated_rate']) or pd.isna(row['medicare_professional_rate']):
+                return None
+            return self.medicare_lookup.calculate_benchmark_percentage(
+                float(row['negotiated_rate']), 
+                float(row['medicare_professional_rate'])
+            )
+        
+        def calculate_asc_pct(row):
+            if pd.isna(row['negotiated_rate']) or pd.isna(row['medicare_asc_stateavg']):
+                return None
+            return self.medicare_lookup.calculate_benchmark_percentage(
+                float(row['negotiated_rate']), 
+                float(row['medicare_asc_stateavg'])
+            )
+        
+        def calculate_opps_pct(row):
+            if pd.isna(row['negotiated_rate']) or pd.isna(row['medicare_opps_stateavg']):
+                return None
+            return self.medicare_lookup.calculate_benchmark_percentage(
+                float(row['negotiated_rate']), 
+                float(row['medicare_opps_stateavg'])
+            )
+        
+        # Apply percentage calculations based on billing class
+        if 'billing_class' in df.columns:
+            # Professional billing class - only calculate professional Medicare percentages
+            prof_mask = df['billing_class'] == 'professional'
+            df.loc[prof_mask, 'negotiated_rate_pct_of_medicare_professional'] = df[prof_mask].apply(calculate_prof_pct, axis=1)
+            
+            # Institutional billing class - only calculate institutional Medicare percentages
+            inst_mask = df['billing_class'] == 'institutional'
+            df.loc[inst_mask, 'negotiated_rate_pct_of_medicare_asc'] = df[inst_mask].apply(calculate_asc_pct, axis=1)
+            df.loc[inst_mask, 'negotiated_rate_pct_of_medicare_opps'] = df[inst_mask].apply(calculate_opps_pct, axis=1)
+            
+            # Edge case: calculate both for records where billing_class is unclear/other
+            other_mask = ~prof_mask & ~inst_mask
+            if other_mask.any():
+                logger.info(f"Found {other_mask.sum()} records with unclear billing_class - calculating both professional and institutional percentages")
+                df.loc[other_mask, 'negotiated_rate_pct_of_medicare_professional'] = df[other_mask].apply(calculate_prof_pct, axis=1)
+                df.loc[other_mask, 'negotiated_rate_pct_of_medicare_asc'] = df[other_mask].apply(calculate_asc_pct, axis=1)
+                df.loc[other_mask, 'negotiated_rate_pct_of_medicare_opps'] = df[other_mask].apply(calculate_opps_pct, axis=1)
+        else:
+            # If no billing_class column, calculate all percentages (edge case)
+            logger.info("No billing_class column found - calculating all Medicare percentages")
+            df['negotiated_rate_pct_of_medicare_professional'] = df.apply(calculate_prof_pct, axis=1)
+            df['negotiated_rate_pct_of_medicare_asc'] = df.apply(calculate_asc_pct, axis=1)
+            df['negotiated_rate_pct_of_medicare_opps'] = df.apply(calculate_opps_pct, axis=1)
+        
+        # Convert numeric columns to proper types
+        numeric_cols = [
+            'medicare_professional_rate', 'medicare_asc_stateavg', 'medicare_opps_stateavg',
+            'negotiated_rate_pct_of_medicare_professional', 'negotiated_rate_pct_of_medicare_asc', 
+            'negotiated_rate_pct_of_medicare_opps'
+        ]
+        
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # Log benchmark statistics
+        benchmark_stats = {
+            'total_records': len(df),
+            'records_with_zip': df['zip_code_5dig'].notna().sum(),
+            'records_with_prof_rates': df['medicare_professional_rate'].notna().sum(),
+            'records_with_asc_rates': df['medicare_asc_stateavg'].notna().sum(),
+            'records_with_opps_rates': df['medicare_opps_stateavg'].notna().sum(),
+            'records_with_prof_pct': df['negotiated_rate_pct_of_medicare_professional'].notna().sum(),
+            'records_with_asc_pct': df['negotiated_rate_pct_of_medicare_asc'].notna().sum(),
+            'records_with_opps_pct': df['negotiated_rate_pct_of_medicare_opps'].notna().sum(),
+            'processing_time_seconds': time.time() - start_time
+        }
+        
+        logger.info(f"Benchmark calculations completed: {benchmark_stats}")
+        
+        return df, benchmark_stats
+    
     def combine_partitions_for_analysis(self, partition_paths: List[str], max_rows: int = 10000, progress_callback=None, columns=None) -> Optional[pd.DataFrame]:
         """Combine multiple partitions in memory for analysis with progress tracking"""
         if not partition_paths:
@@ -286,17 +499,35 @@ class PartitionNavigator:
                 logger.info(f"Combining {len(combined_dfs)} DataFrames...")
                 combined_df = pd.concat(combined_dfs, ignore_index=True)
                 
-                # Add summary metadata
-                combined_df.attrs['_load_summary'] = {
+                # Add Medicare benchmark calculations
+                benchmark_stats = {}
+                if self.medicare_lookup:
+                    try:
+                        logger.info("Adding Medicare benchmark calculations...")
+                        combined_df, benchmark_stats = self._add_benchmark_columns(combined_df)
+                    except Exception as e:
+                        logger.error(f"Error adding benchmark calculations: {e}")
+                        benchmark_stats = {'error': str(e)}
+                else:
+                    logger.info("Medicare benchmark lookup not available - skipping benchmark calculations")
+                
+                # Add summary metadata including benchmark statistics
+                load_summary = {
                     'total_partitions': len(partition_paths),
                     'successful_loads': successful_loads,
                     'failed_loads': failed_loads,
                     'total_rows': len(combined_df),
                     'load_time_seconds': time.time() - start_time,
-                    'columns': list(combined_df.columns)
+                    'columns': list(combined_df.columns),
+                    'benchmark_stats': benchmark_stats
                 }
                 
+                combined_df.attrs['_load_summary'] = load_summary
+                
                 logger.info(f"Successfully combined {len(combined_df)} rows from {successful_loads} partitions in {time.time() - start_time:.2f}s")
+                if benchmark_stats:
+                    logger.info(f"Benchmark calculations: {benchmark_stats}")
+                
                 return combined_df
             else:
                 logger.warning("No partitions were successfully loaded")
@@ -519,36 +750,72 @@ class PartitionNavigator:
         return column_analysis
     
     def _get_statistical_summary(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Get statistical summary of numeric columns"""
+        """Get statistical summary of numeric columns with Medicare focus"""
         numeric_cols = df.select_dtypes(include=['number']).columns
         
         if len(numeric_cols) == 0:
             return {'message': 'No numeric columns found'}
         
         summary = {}
+        
+        # Prioritize Medicare-related columns for key metrics
+        medicare_priority_cols = [
+            'medicare_professional_rate', 'negotiated_rate_pct_of_medicare_professional',
+            'medicare_asc_stateavg', 'medicare_opps_stateavg',
+            'negotiated_rate_pct_of_medicare_asc', 'negotiated_rate_pct_of_medicare_opps',
+            'rate'
+        ]
+        
+        # Process Medicare priority columns first
+        for col in medicare_priority_cols:
+            if col in numeric_cols:
+                col_data = df[col].dropna()
+                if len(col_data) > 0:
+                    summary[col] = {
+                        'count': len(col_data),
+                        'mean': round(col_data.mean(), 2),
+                        'std': round(col_data.std(), 2),
+                        'min': round(col_data.min(), 2),
+                        'max': round(col_data.max(), 2),
+                        'median': round(col_data.median(), 2),
+                        'quartiles': {
+                            'q25': round(col_data.quantile(0.25), 2),
+                            'q75': round(col_data.quantile(0.75), 2)
+                        }
+                    }
+                    
+                    # Add currency formatting info for rate columns
+                    if 'rate' in col.lower() and 'pct' not in col.lower():
+                        summary[col]['currency_format'] = True
+                    elif 'pct' in col.lower():
+                        summary[col]['percentage_format'] = True
+        
+        # Process remaining numeric columns
         for col in numeric_cols:
             if col.startswith('_'):  # Skip metadata columns
                 continue
-                
-            col_data = df[col].dropna()
-            if len(col_data) > 0:
-                summary[col] = {
-                    'count': len(col_data),
-                    'mean': round(col_data.mean(), 2),
-                    'std': round(col_data.std(), 2),
-                    'min': round(col_data.min(), 2),
-                    'max': round(col_data.max(), 2),
-                    'median': round(col_data.median(), 2),
-                    'quartiles': {
-                        'q25': round(col_data.quantile(0.25), 2),
-                        'q75': round(col_data.quantile(0.75), 2)
+            
+            if col not in medicare_priority_cols:  # Skip already processed columns
+                col_data = df[col].dropna()
+                if len(col_data) > 0:
+                    summary[col] = {
+                        'count': len(col_data),
+                        'mean': round(col_data.mean(), 2),
+                        'std': round(col_data.std(), 2),
+                        'min': round(col_data.min(), 2),
+                        'max': round(col_data.max(), 2),
+                        'median': round(col_data.median(), 2),
+                        'quartiles': {
+                            'q25': round(col_data.quantile(0.25), 2),
+                            'q75': round(col_data.quantile(0.75), 2)
+                        }
                     }
-                }
         
-        return summary
+        # Convert numpy types for JSON serialization
+        return self._convert_numpy_types(summary)
     
     def _get_business_insights(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Get business-specific insights from healthcare data"""
+        """Get business-specific insights from healthcare data with Medicare benchmarks"""
         insights = {}
         
         # Analyze rates if present
@@ -566,6 +833,96 @@ class PartitionNavigator:
                     'high_value_threshold': round(rate_data.quantile(0.95), 2)
                 }
         
+        # Medicare Professional Analysis
+        if 'medicare_professional_rate' in df.columns:
+            prof_medicare_data = df['medicare_professional_rate'].dropna()
+            if len(prof_medicare_data) > 0:
+                insights['medicare_professional_analysis'] = {
+                    'total_records_with_medicare_prof': len(prof_medicare_data),
+                    'avg_medicare_professional_rate': round(prof_medicare_data.mean(), 2),
+                    'median_medicare_professional_rate': round(prof_medicare_data.median(), 2),
+                    'medicare_prof_range': {
+                        'min': round(prof_medicare_data.min(), 2),
+                        'max': round(prof_medicare_data.max(), 2)
+                    }
+                }
+        
+        # Medicare Professional vs Negotiated Rate Analysis
+        if 'negotiated_rate_pct_of_medicare_professional' in df.columns:
+            prof_pct_data = df['negotiated_rate_pct_of_medicare_professional'].dropna()
+            if len(prof_pct_data) > 0:
+                insights['medicare_professional_comparison'] = {
+                    'total_records_with_comparison': len(prof_pct_data),
+                    'avg_negotiated_rate_pct_of_medicare_prof': round(prof_pct_data.mean(), 2),
+                    'median_negotiated_rate_pct_of_medicare_prof': round(prof_pct_data.median(), 2),
+                    'pct_range': {
+                        'min': round(prof_pct_data.min(), 2),
+                        'max': round(prof_pct_data.max(), 2)
+                    },
+                    'above_medicare_threshold': round((prof_pct_data > 100).sum() / len(prof_pct_data) * 100, 1),
+                    'below_medicare_threshold': round((prof_pct_data < 100).sum() / len(prof_pct_data) * 100, 1)
+                }
+        
+        # Medicare Institutional Analysis (ASC)
+        if 'medicare_asc_stateavg' in df.columns:
+            asc_medicare_data = df['medicare_asc_stateavg'].dropna()
+            if len(asc_medicare_data) > 0:
+                insights['medicare_asc_analysis'] = {
+                    'total_records_with_medicare_asc': len(asc_medicare_data),
+                    'avg_medicare_asc_stateavg': round(asc_medicare_data.mean(), 2),
+                    'median_medicare_asc_stateavg': round(asc_medicare_data.median(), 2),
+                    'medicare_asc_range': {
+                        'min': round(asc_medicare_data.min(), 2),
+                        'max': round(asc_medicare_data.max(), 2)
+                    }
+                }
+        
+        # Medicare Institutional Analysis (OPPS)
+        if 'medicare_opps_stateavg' in df.columns:
+            opps_medicare_data = df['medicare_opps_stateavg'].dropna()
+            if len(opps_medicare_data) > 0:
+                insights['medicare_opps_analysis'] = {
+                    'total_records_with_medicare_opps': len(opps_medicare_data),
+                    'avg_medicare_opps_stateavg': round(opps_medicare_data.mean(), 2),
+                    'median_medicare_opps_stateavg': round(opps_medicare_data.median(), 2),
+                    'medicare_opps_range': {
+                        'min': round(opps_medicare_data.min(), 2),
+                        'max': round(opps_medicare_data.max(), 2)
+                    }
+                }
+        
+        # Medicare ASC vs Negotiated Rate Analysis
+        if 'negotiated_rate_pct_of_medicare_asc' in df.columns:
+            asc_pct_data = df['negotiated_rate_pct_of_medicare_asc'].dropna()
+            if len(asc_pct_data) > 0:
+                insights['medicare_asc_comparison'] = {
+                    'total_records_with_asc_comparison': len(asc_pct_data),
+                    'avg_negotiated_rate_pct_of_medicare_asc': round(asc_pct_data.mean(), 2),
+                    'median_negotiated_rate_pct_of_medicare_asc': round(asc_pct_data.median(), 2),
+                    'asc_pct_range': {
+                        'min': round(asc_pct_data.min(), 2),
+                        'max': round(asc_pct_data.max(), 2)
+                    },
+                    'above_medicare_asc_threshold': round((asc_pct_data > 100).sum() / len(asc_pct_data) * 100, 1),
+                    'below_medicare_asc_threshold': round((asc_pct_data < 100).sum() / len(asc_pct_data) * 100, 1)
+                }
+        
+        # Medicare OPPS vs Negotiated Rate Analysis
+        if 'negotiated_rate_pct_of_medicare_opps' in df.columns:
+            opps_pct_data = df['negotiated_rate_pct_of_medicare_opps'].dropna()
+            if len(opps_pct_data) > 0:
+                insights['medicare_opps_comparison'] = {
+                    'total_records_with_opps_comparison': len(opps_pct_data),
+                    'avg_negotiated_rate_pct_of_medicare_opps': round(opps_pct_data.mean(), 2),
+                    'median_negotiated_rate_pct_of_medicare_opps': round(opps_pct_data.median(), 2),
+                    'opps_pct_range': {
+                        'min': round(opps_pct_data.min(), 2),
+                        'max': round(opps_pct_data.max(), 2)
+                    },
+                    'above_medicare_opps_threshold': round((opps_pct_data > 100).sum() / len(opps_pct_data) * 100, 1),
+                    'below_medicare_opps_threshold': round((opps_pct_data < 100).sum() / len(opps_pct_data) * 100, 1)
+                }
+        
         # Analyze by billing class if present
         if 'billing_class' in df.columns:
             billing_class_counts = df['billing_class'].value_counts()
@@ -581,7 +938,8 @@ class PartitionNavigator:
             org_counts = df['org_name'].value_counts().head(10)
             insights['top_organizations'] = org_counts.to_dict()
         
-        return insights
+        # Convert numpy types for JSON serialization
+        return self._convert_numpy_types(insights)
     
     def _get_recommendations(self, df: pd.DataFrame) -> List[str]:
         """Get recommendations for data analysis and usage"""

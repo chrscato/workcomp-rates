@@ -74,3 +74,4 @@ logs/
 # Backup files
 *.bak
 *.backup
+server-pass.txt

@@ -1024,7 +1024,7 @@ def dataset_review_map(request):
             s3_paths = s3_paths[:max_partitions]
         
         # Combine partitions for analysis
-        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows, columns=required_columns)
+        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows)
         
         if combined_df is None or combined_df.empty:
             return render(request, 'core/error.html', {
@@ -1064,8 +1064,7 @@ def dataset_review_map(request):
             'partitions_df': partitions_df,
             'combined_df_info': {
                 'shape': combined_df.shape,
-                'columns': list(combined_df.columns),
-                'memory_usage_mb': round(combined_df.memory_usage(deep=True).sum() / 1024 / 1024, 2)
+                'columns': list(combined_df.columns)
             },
             'sample_data': map_data,
             'has_data': combined_df is not None and not combined_df.empty,
@@ -1191,7 +1190,7 @@ def dataset_review(request):
         
         # Combine partitions for analysis (only load required columns)
         logger.info(f"Starting to combine {len(s3_paths)} partitions (max_rows: {max_rows}) with {len(required_columns)} columns")
-        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows, columns=required_columns)
+        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows)
         logger.info(f"Combination completed. DataFrame shape: {combined_df.shape if combined_df is not None else 'None'}")
         
         if combined_df is None or combined_df.empty:
@@ -1203,9 +1202,7 @@ def dataset_review(request):
         logger.info("Starting simple analysis...")
         analysis = {
             'dataset_summary': {
-                'total_rows': len(combined_df),
-                'total_columns': len(combined_df.columns),
-                'memory_usage_mb': round(combined_df.memory_usage(deep=True).sum() / 1024 / 1024, 2)
+                'total_rows': len(combined_df)
             },
             'basic_stats': {}
         }
@@ -1253,24 +1250,161 @@ def dataset_review(request):
                     # Get unique values and their counts
                     value_counts = combined_df[col].value_counts().head(20)  # Top 20 values
                     
-                    # Calculate average negotiated rate for each value
+                    # Calculate metrics for each value based on billing class
                     metrics_data = []
                     for value in value_counts.index:
                         if pd.notna(value):
                             subset = combined_df[combined_df[col] == value]
+                            record_count = len(subset)
+                            
+                            # Base metrics
+                            metric_item = {
+                                'value': str(value),
+                                'record_count': record_count
+                            }
+                            
+                            # Calculate average negotiated rate
                             if 'negotiated_rate' in subset.columns:
                                 avg_rate = subset['negotiated_rate'].mean()
-                                record_count = len(subset)
-                                metrics_data.append({
-                                    'value': str(value),
-                                    'record_count': record_count,
-                                    'avg_negotiated_rate': round(avg_rate, 2) if pd.notna(avg_rate) else None
-                                })
+                                metric_item['avg_negotiated_rate'] = round(avg_rate, 2) if pd.notna(avg_rate) else None
+                            
+                            # Add Medicare benchmark metrics based on billing class
+                            if 'billing_class' in subset.columns:
+                                # Check if all records have the same billing class
+                                unique_billing_classes = subset['billing_class'].dropna().unique()
+                                
+                                if len(unique_billing_classes) == 1:
+                                    billing_class = unique_billing_classes[0]
+                                    
+                                    if billing_class == 'professional':
+                                        # Professional billing - use Medicare Professional rates
+                                        if 'medicare_professional_rate' in subset.columns:
+                                            prof_medicare = subset['medicare_professional_rate'].dropna()
+                                            if len(prof_medicare) > 0:
+                                                metric_item['avg_medicare_professional_rate'] = round(prof_medicare.mean(), 2)
+                                        
+                                        if 'negotiated_rate_pct_of_medicare_professional' in subset.columns:
+                                            prof_pct = subset['negotiated_rate_pct_of_medicare_professional'].dropna()
+                                            if len(prof_pct) > 0:
+                                                metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct.mean(), 2)
+                                    
+                                    elif billing_class == 'institutional':
+                                        # Institutional billing - use Medicare ASC and OPPS rates
+                                        if 'medicare_asc_stateavg' in subset.columns:
+                                            asc_medicare = subset['medicare_asc_stateavg'].dropna()
+                                            if len(asc_medicare) > 0:
+                                                metric_item['avg_medicare_asc_stateavg'] = round(asc_medicare.mean(), 2)
+                                        
+                                        if 'medicare_opps_stateavg' in subset.columns:
+                                            opps_medicare = subset['medicare_opps_stateavg'].dropna()
+                                            if len(opps_medicare) > 0:
+                                                metric_item['avg_medicare_opps_stateavg'] = round(opps_medicare.mean(), 2)
+                                        
+                                        if 'negotiated_rate_pct_of_medicare_asc' in subset.columns:
+                                            asc_pct = subset['negotiated_rate_pct_of_medicare_asc'].dropna()
+                                            if len(asc_pct) > 0:
+                                                metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct.mean(), 2)
+                                        
+                                        if 'negotiated_rate_pct_of_medicare_opps' in subset.columns:
+                                            opps_pct = subset['negotiated_rate_pct_of_medicare_opps'].dropna()
+                                            if len(opps_pct) > 0:
+                                                metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct.mean(), 2)
+                                    
+                                    else:
+                                        # Mixed or other billing classes - calculate both
+                                        logger.info(f"Mixed billing classes for {col}={value}, calculating both professional and institutional metrics")
+                                        
+                                        # Professional metrics
+                                        if 'medicare_professional_rate' in subset.columns:
+                                            prof_medicare = subset['medicare_professional_rate'].dropna()
+                                            if len(prof_medicare) > 0:
+                                                metric_item['avg_medicare_professional_rate'] = round(prof_medicare.mean(), 2)
+                                        
+                                        if 'negotiated_rate_pct_of_medicare_professional' in subset.columns:
+                                            prof_pct = subset['negotiated_rate_pct_of_medicare_professional'].dropna()
+                                            if len(prof_pct) > 0:
+                                                metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct.mean(), 2)
+                                        
+                                        # Institutional metrics
+                                        if 'medicare_asc_stateavg' in subset.columns:
+                                            asc_medicare = subset['medicare_asc_stateavg'].dropna()
+                                            if len(asc_medicare) > 0:
+                                                metric_item['avg_medicare_asc_stateavg'] = round(asc_medicare.mean(), 2)
+                                        
+                                        if 'medicare_opps_stateavg' in subset.columns:
+                                            opps_medicare = subset['medicare_opps_stateavg'].dropna()
+                                            if len(opps_medicare) > 0:
+                                                metric_item['avg_medicare_opps_stateavg'] = round(opps_medicare.mean(), 2)
+                                        
+                                        if 'negotiated_rate_pct_of_medicare_asc' in subset.columns:
+                                            asc_pct = subset['negotiated_rate_pct_of_medicare_asc'].dropna()
+                                            if len(asc_pct) > 0:
+                                                metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct.mean(), 2)
+                                        
+                                        if 'negotiated_rate_pct_of_medicare_opps' in subset.columns:
+                                            opps_pct = subset['negotiated_rate_pct_of_medicare_opps'].dropna()
+                                            if len(opps_pct) > 0:
+                                                metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct.mean(), 2)
+                                
+                                else:
+                                    # Mixed billing classes - calculate both
+                                    logger.info(f"Mixed billing classes for {col}={value}, calculating both professional and institutional metrics")
+                                    
+                                    # Professional metrics
+                                    if 'medicare_professional_rate' in subset.columns:
+                                        prof_medicare = subset['medicare_professional_rate'].dropna()
+                                        if len(prof_medicare) > 0:
+                                            metric_item['avg_medicare_professional_rate'] = round(prof_medicare.mean(), 2)
+                                    
+                                    if 'negotiated_rate_pct_of_medicare_professional' in subset.columns:
+                                        prof_pct = subset['negotiated_rate_pct_of_medicare_professional'].dropna()
+                                        if len(prof_pct) > 0:
+                                            metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct.mean(), 2)
+                                    
+                                    # Institutional metrics
+                                    if 'medicare_asc_stateavg' in subset.columns:
+                                        asc_medicare = subset['medicare_asc_stateavg'].dropna()
+                                        if len(asc_medicare) > 0:
+                                            metric_item['avg_medicare_asc_stateavg'] = round(asc_medicare.mean(), 2)
+                                    
+                                    if 'medicare_opps_stateavg' in subset.columns:
+                                        opps_medicare = subset['medicare_opps_stateavg'].dropna()
+                                        if len(opps_medicare) > 0:
+                                            metric_item['avg_medicare_opps_stateavg'] = round(opps_medicare.mean(), 2)
+                                    
+                                    if 'negotiated_rate_pct_of_medicare_asc' in subset.columns:
+                                        asc_pct = subset['negotiated_rate_pct_of_medicare_asc'].dropna()
+                                        if len(asc_pct) > 0:
+                                            metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct.mean(), 2)
+                                    
+                                    if 'negotiated_rate_pct_of_medicare_opps' in subset.columns:
+                                        opps_pct = subset['negotiated_rate_pct_of_medicare_opps'].dropna()
+                                        if len(opps_pct) > 0:
+                                            metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct.mean(), 2)
+                            
+                            metrics_data.append(metric_item)
                     
-                    analysis['key_metrics'][col] = {
+                    # Add formatting flags for frontend
+                    key_metrics_info = {
                         'total_unique_values': len(combined_df[col].dropna().unique()),
                         'top_values': metrics_data[:10]  # Top 10 for display
                     }
+                    
+                    # Add formatting information for frontend
+                    formatting_info = {
+                        'avg_negotiated_rate': {'currency_format': True},
+                        'avg_medicare_professional_rate': {'currency_format': True},
+                        'avg_medicare_asc_stateavg': {'currency_format': True},
+                        'avg_medicare_opps_stateavg': {'currency_format': True},
+                        'avg_negotiated_rate_pct_of_medicare_professional': {'percentage_format': True},
+                        'avg_negotiated_rate_pct_of_medicare_asc': {'percentage_format': True},
+                        'avg_negotiated_rate_pct_of_medicare_opps': {'percentage_format': True}
+                    }
+                    
+                    key_metrics_info['formatting_info'] = formatting_info
+                    
+                    analysis['key_metrics'][col] = key_metrics_info
+                    
                 except Exception as e:
                     logger.warning(f"Could not analyze key metric {col}: {e}")
                     analysis['key_metrics'][col] = {'error': str(e)}
@@ -1382,7 +1516,6 @@ def dataset_review(request):
             'combined_df_info': {
                 'shape': combined_df.shape,
                 'columns': list(combined_df.columns),
-                'memory_usage_mb': round(combined_df.memory_usage(deep=True).sum() / 1024 / 1024, 2),
                 'load_summary': getattr(combined_df, 'attrs', {}).get('_load_summary', {}),
                 'total_time_seconds': round(total_time, 2)
             },
