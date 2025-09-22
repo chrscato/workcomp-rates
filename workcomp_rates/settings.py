@@ -17,6 +17,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# AWS Configuration
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_DEFAULT_REGION = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+AWS_S3_BUCKET = os.environ.get('AWS_S3_BUCKET', 'partitioned-data')
+AWS_S3_PREFIX = os.environ.get('AWS_S3_PREFIX', 'partitions/')
+AWS_SESSION_TOKEN = os.environ.get('AWS_SESSION_TOKEN')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

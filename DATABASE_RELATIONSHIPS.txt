@@ -1,0 +1,72 @@
+DATABASE TABLE RELATIONSHIPS
+============================
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    PARTITION NAVIGATION SYSTEM                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   dim_payers    │    │   partitions    │    │ dim_taxonomies  │
+│                 │    │                 │    │                 │
+│ payer_slug (PK) │◄───┤ payer_slug      │    │ taxonomy_code   │
+│ display_name    │    │ state           │    │ taxonomy_desc   │
+│ partition_count │    │ billing_class   │    │ partition_count │
+│ total_size_mb   │    │ procedure_set   │    │ total_size_mb   │
+└─────────────────┘    │ taxonomy_code   │◄───┤                 │
+                       │ stat_area_name  │    └─────────────────┘
+                       │ year            │
+                       │ month           │
+                       │ s3_bucket       │
+                       │ s3_key          │
+                       │ file_size_mb    │
+                       │ estimated_records│
+                       └─────────────────┘
+
+FILTER FIELD MAPPING
+====================
+
+Required Filters (Tier 1):
+├── payer_slug     → dim_payers.payer_slug + display_name
+├── state          → partitions.state
+└── billing_class  → partitions.billing_class
+
+Optional Filters (Tier 2):
+├── procedure_set  → partitions.procedure_set
+├── taxonomy_code  → dim_taxonomies.taxonomy_code + description
+└── stat_area_name → partitions.stat_area_name
+
+Temporal Filters (Tier 3):
+├── year           → partitions.year
+└── month          → partitions.month
+
+DATA FLOW
+=========
+
+1. User Interface
+   ↓
+2. Filter Selection
+   ↓
+3. Database Query (partitions table with JOINs)
+   ↓
+4. Partition Results (S3 paths)
+   ↓
+5. S3 Data Loading
+   ↓
+6. Combined Analysis
+
+QUERY EXAMPLE
+=============
+
+SELECT p.*, dp.payer_display_name
+FROM partitions p
+LEFT JOIN dim_payers dp ON p.payer_slug = dp.payer_slug
+WHERE p.payer_slug = 'unitedhealthcare-of-georgia-inc'
+  AND p.state = 'GA'
+  AND p.billing_class = 'professional'
+  AND p.procedure_set = 'Evaluation and Management'
+  AND p.taxonomy_code = '207LP3000X'
+  AND p.stat_area_name = 'Atlanta-Sandy Springs-Alpharetta, GA MSA'
+  AND p.year = 2025
+  AND p.month = 8
+ORDER BY p.file_size_mb DESC
+LIMIT 1000

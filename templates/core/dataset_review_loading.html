@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+
+{% block title %}Loading Dataset Review...{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card mt-5">
+                <div class="card-body text-center py-5">
+                    <!-- Animated Loading Spinner -->
+                    <div class="mb-4">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Dots Animation -->
+                    <div class="mb-4">
+                        <div class="loading-dots">
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Loading Text -->
+                    <h4 class="text-primary mb-3">Loading Dataset Review</h4>
+                    <p class="text-muted mb-4">Combining partitions and analyzing data...</p>
+                    
+                    <!-- Progress Steps -->
+                    <div class="progress-steps">
+                        <div class="step active" id="step1">
+                            <i class="fas fa-search"></i>
+                            <span>Finding partitions</span>
+                        </div>
+                        <div class="step" id="step2">
+                            <i class="fas fa-cloud-download-alt"></i>
+                            <span>Loading from S3</span>
+                        </div>
+                        <div class="step" id="step3">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>Analyzing data</span>
+                        </div>
+                        <div class="step" id="step4">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Complete</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Estimated Time -->
+                    <div class="mt-4">
+                        <small class="text-muted">Estimated time: 5-15 seconds</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Back Button -->
+            <div class="text-center mt-4">
+                <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Partition Selection
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.loading-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #007bff;
+    animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.dot:nth-child(1) { animation-delay: -0.32s; }
+.dot:nth-child(2) { animation-delay: -0.16s; }
+.dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0;
+    position: relative;
+}
+
+.progress-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #e9ecef;
+    z-index: 1;
+}
+
+.progress-steps::after {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    height: 2px;
+    background-color: #007bff;
+    z-index: 2;
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 3;
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
+}
+
+.step.active {
+    opacity: 1;
+}
+
+.step i {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #fff;
+    border: 2px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.step.active i {
+    border-color: #007bff;
+    color: #007bff;
+}
+
+.step span {
+    font-size: 0.875rem;
+    text-align: center;
+    color: #6c757d;
+}
+
+.step.active span {
+    color: #007bff;
+    font-weight: 500;
+}
+
+/* Progress bar animation */
+.progress-steps[data-step="1"]::after { width: 25%; }
+.progress-steps[data-step="2"]::after { width: 50%; }
+.progress-steps[data-step="3"]::after { width: 75%; }
+.progress-steps[data-step="4"]::after { width: 100%; }
+</style>
+
+<script>
+// Simulate progress steps
+let currentStep = 1;
+const steps = document.querySelectorAll('.step');
+const progressBar = document.querySelector('.progress-steps');
+
+function updateProgress() {
+    // Update active step
+    steps.forEach((step, index) => {
+        step.classList.toggle('active', index + 1 <= currentStep);
+    });
+    
+    // Update progress bar
+    progressBar.setAttribute('data-step', currentStep);
+    
+    // Move to next step
+    if (currentStep < 4) {
+        currentStep++;
+        setTimeout(updateProgress, 2000); // 2 seconds per step
+    }
+}
+
+// Start progress animation
+setTimeout(updateProgress, 1000);
+
+// Auto-refresh to check if data is ready
+let checkCount = 0;
+const maxChecks = 30; // 30 seconds max
+
+function checkDataReady() {
+    checkCount++;
+    
+    if (checkCount >= maxChecks) {
+        // Timeout - redirect back with error
+        window.location.href = "{% url 'commercial_rate_insights' %}?error=timeout";
+        return;
+    }
+    
+    // Check if we can access the actual page
+    const targetUrl = window.location.href.replace('/loading', '');
+    fetch(targetUrl)
+        .then(response => {
+            if (response.ok) {
+                // Data is ready, redirect to actual page
+                window.location.href = targetUrl;
+            } else {
+                // Still loading, check again
+                setTimeout(checkDataReady, 1000);
+            }
+        })
+        .catch(() => {
+            // Still loading, check again
+            setTimeout(checkDataReady, 1000);
+        });
+}
+
+// Start checking for data readiness
+setTimeout(checkDataReady, 3000);
+</script>
+{% endblock %}

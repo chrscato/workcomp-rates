@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}TIN-Specific Commercial Rates - Competitive Intelligence{% endblock %}
+{% block title %}Commercial Rates - Competitive Intelligence{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -10,11 +10,11 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body text-center">
-                    <h1 class="display-4 text-primary mb-3">TIN-Specific Commercial Rates</h1>
+                    <h1 class="display-4 text-primary mb-3">Commercial Rate Insights</h1>
                     <p class="lead text-muted">Competitive intelligence tool to understand how commercial payers like UnitedHealthcare and Aetna are paying benchmarked against Medicare and State Workers' Comp Fee Schedules</p>
                     <p class="text-muted">For both Professional and Facility reimbursement. Hospital Outpatient and ASC methodologies.</p>
                     <div class="mt-4">
-                        <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-primary btn-lg">
+                        <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary btn-lg">
                             <i class="bi bi-graph-up-arrow me-2"></i>View Rate Insights
                         </a>
                     </div>
@@ -33,7 +33,7 @@
                     </div>
                     <h5 class="card-title">Professional Reimbursement</h5>
                     <p class="card-text">Analyze commercial payer rates for professional services benchmarked against Medicare and state fee schedules.</p>
-                    <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-primary">Explore Professional Rates</a>
+                    
                 </div>
             </div>
         </div>
@@ -46,7 +46,7 @@
                     </div>
                     <h5 class="card-title">Facility Reimbursement</h5>
                     <p class="card-text">Compare Hospital Outpatient and ASC methodologies across commercial payers and Medicare benchmarks.</p>
-                    <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-info">View Facility Rates</a>
+                    
                 </div>
             </div>
         </div>
@@ -59,7 +59,7 @@
                     </div>
                     <h5 class="card-title">Competitive Intelligence</h5>
                     <p class="card-text">Benchmark your rates against UnitedHealthcare, Aetna, and other commercial payers with detailed analytics.</p>
-                    <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-success">Start Benchmarking</a>
+                    
                 </div>
             </div>
         </div>

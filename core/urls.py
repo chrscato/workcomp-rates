@@ -3,7 +3,14 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
-    path('commercial/insights/', views.commercial_rate_insights, name='commercial_rate_insights'),
+    path('commercial/insights/', views.commercial_rate_insights_tile, name='commercial_rate_insights'),
+    path('commercial/insights/dataset-review/loading/', views.dataset_review_loading, name='dataset_review_loading'),
+    path('commercial/insights/dataset-review/map/', views.dataset_review_map, name='dataset_review_map'),
+    path('commercial/insights/dataset-review/', views.dataset_review, name='dataset_review'),
+    path('debug/filter-options/', views.debug_filter_options, name='debug_filter_options'),
+    path('debug/s3-connection/', views.debug_s3_connection, name='debug_s3_connection'),
+    # Legacy views (keeping for backward compatibility)
+    path('commercial/insights/legacy/', views.commercial_rate_insights, name='commercial_rate_insights_legacy'),
     path('commercial/insights/map/', views.commercial_rate_insights_map, name='commercial_rate_insights_map'),
     path('commercial/insights/<str:state_code>/npi-selection/', views.npi_type_selection, name='npi_type_selection'),
     path('commercial/insights/<str:state_code>/overview/', views.commercial_rate_insights_overview, name='commercial_rate_insights_overview'),

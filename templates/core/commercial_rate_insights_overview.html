@@ -111,11 +111,21 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label for="primary_taxonomy_desc" class="form-label fw-bold">
-                                        <i class="fas fa-user-md text-primary"></i> Primary Taxonomy Description
+                                        <i class="fas fa-user-md text-primary"></i> Taxonomy Description
                                     </label>
                                     <select class="form-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" multiple>
                                         {% for taxonomy in filtered_options.primary_taxonomy_descs %}
                                             <option value="{{ taxonomy }}" {% if taxonomy in active_prefilters.primary_taxonomy_desc %}selected{% endif %}>{{ taxonomy }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="primary_taxonomy_code" class="form-label fw-bold">
+                                        <i class="fas fa-hashtag text-info"></i> Taxonomy Code
+                                    </label>
+                                    <select class="form-select select2-dropdown" id="primary_taxonomy_code" name="primary_taxonomy_code" multiple>
+                                        {% for code in filtered_options.primary_taxonomy_codes %}
+                                            <option value="{{ code }}" {% if code in active_prefilters.primary_taxonomy_code %}selected{% endif %}>{{ code }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>

@@ -135,6 +135,28 @@
                             </div>
                         </div>
                         <div class="row g-3 mt-3">
+                            <div class="col-md-6">
+                                <label for="primary_taxonomy_code" class="form-label fw-bold">
+                                    <i class="fas fa-hashtag text-info"></i> Taxonomy Code
+                                </label>
+                                <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_code" name="primary_taxonomy_code" data-filter="primary_taxonomy_code" multiple>
+                                    {% for code in filters.primary_taxonomy_codes %}
+                                        <option value="{{ code }}" {% if code in active_filters.primary_taxonomy_code %}selected{% endif %}>{{ code }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="primary_taxonomy_desc" class="form-label fw-bold">
+                                    <i class="fas fa-user-md text-primary"></i> Taxonomy Description
+                                </label>
+                                <select class="form-select filter-select select2-dropdown" id="primary_taxonomy_desc" name="primary_taxonomy_desc" data-filter="primary_taxonomy_desc" multiple>
+                                    {% for desc in filters.primary_taxonomy_descs %}
+                                        <option value="{{ desc }}" {% if desc in active_filters.primary_taxonomy_desc %}selected{% endif %}>{{ desc }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-3">
                             <div class="col-md-12">
                                 <label for="billing_code" class="form-label fw-bold">
                                     <i class="fas fa-barcode text-info"></i> Billing Code

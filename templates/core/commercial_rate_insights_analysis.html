@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Data Analysis - WorkComp Rates{% endblock %}
+
+{% block extra_head %}
+<!-- Plotly for data visualization -->
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+
+<style>
+    .analysis-header {
+        background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+    
+    .filter-summary {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    
+    .filter-badge {
+        background: #6c5ce7;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        margin: 0.25rem;
+        display: inline-block;
+    }
+    
+    .data-summary {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .summary-metric {
+        text-align: center;
+        padding: 1rem;
+        border-right: 1px solid #eee;
+    }
+    
+    .summary-metric:last-child {
+        border-right: none;
+    }
+    
+    .summary-metric h3 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #6c5ce7;
+        margin-bottom: 0.5rem;
+    }
+    
+    .summary-metric p {
+        color: #666;
+        margin: 0;
+    }
+    
+    .data-table {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        border-top: none;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .export-buttons {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .btn-export {
+        background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        margin: 0.25rem;
+    }
+    
+    .btn-export:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+        color: white;
+    }
+    
+    .partition-info {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        border-left: 4px solid #6c5ce7;
+    }
+    
+    .partition-stats {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .stat-value {
+        font-weight: 600;
+        color: #6c5ce7;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 0.8rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Analysis Header -->
+    <div class="analysis-header">
+        <div class="row">
+            <div class="col-md-8">
+                <h2 class="mb-3">
+                    <i class="fas fa-chart-line"></i>
+                    Data Analysis Results
+                </h2>
+                <p class="mb-0">Analysis of combined partition data based on your selected filters</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'commercial_rate_insights' %}" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> Back to Filters
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Summary -->
+    <div class="filter-summary">
+        <h5 class="mb-3">
+            <i class="fas fa-filter"></i>
+            Applied Filters
+        </h5>
+        <div>
+            {% for key, value in filters.items %}
+                <span class="filter-badge">
+                    <strong>{{ key|title }}:</strong> {{ value }}
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if error_message %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ error_message }}
+        </div>
+    {% elif has_data %}
+        <!-- Data Summary -->
+        <div class="data-summary">
+            <h5 class="mb-4">
+                <i class="fas fa-database"></i>
+                Data Summary
+            </h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="summary-metric">
+                        <h3>{{ analysis.shape.rows|intcomma }}</h3>
+                        <p>Total Rows</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-metric">
+                        <h3>{{ analysis.shape.columns }}</h3>
+                        <p>Total Columns</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-metric">
+                        <h3>{{ partitions_df|length }}</h3>
+                        <p>Partitions Combined</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="summary-metric">
+                        <h3>{{ max_rows|intcomma }}</h3>
+                        <p>Max Rows Limit</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Partition Information -->
+        <div class="data-table">
+            <h5 class="mb-3">
+                <i class="fas fa-layer-group"></i>
+                Source Partitions
+            </h5>
+            {% for partition in partitions_df %}
+            <div class="partition-info">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h6 class="mb-1">{{ partition.payer_display_name|default:partition.payer_slug }}</h6>
+                        <small class="text-muted">{{ partition.partition_path }}</small>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="partition-stats">
+                            <div class="stat-item">
+                                <div class="stat-value">{{ partition.file_size_mb|floatformat:2 }} MB</div>
+                                <div class="stat-label">Size</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">{{ partition.estimated_records|intcomma }}</div>
+                                <div class="stat-label">Records</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value">{{ partition.year }}-{{ partition.month|stringformat:"02d" }}</div>
+                                <div class="stat-label">Period</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Sample Data Table -->
+        <div class="data-table">
+            <h5 class="mb-3">
+                <i class="fas fa-table"></i>
+                Sample Data (First 20 Rows)
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            {% for column in analysis.columns|slice:":10" %}
+                                <th>{{ column|title }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in analysis.sample_data|slice:":20" %}
+                        <tr>
+                            {% for column in analysis.columns|slice:":10" %}
+                                <td>
+                                    {% if row|get_item:column %}
+                                        {% if column|contains:'rate' or column|contains:'amount' %}
+                                            ${{ row|get_item:column|floatformat:2|intcomma }}
+                                        {% else %}
+                                            {{ row|get_item:column|truncatechars:50 }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Numeric Summary -->
+        {% if analysis.numeric_summary %}
+        <div class="data-table">
+            <h5 class="mb-3">
+                <i class="fas fa-calculator"></i>
+                Numeric Summary
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Count</th>
+                            <th>Mean</th>
+                            <th>Std</th>
+                            <th>Min</th>
+                            <th>25%</th>
+                            <th>50%</th>
+                            <th>75%</th>
+                            <th>Max</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for column, stats in analysis.numeric_summary.items %}
+                        <tr>
+                            <td><strong>{{ column|title }}</strong></td>
+                            <td>{{ stats.count|intcomma }}</td>
+                            <td>${{ stats.mean|floatformat:2|intcomma }}</td>
+                            <td>${{ stats.std|floatformat:2|intcomma }}</td>
+                            <td>${{ stats.min|floatformat:2|intcomma }}</td>
+                            <td>${{ stats|get_item:"25%"|floatformat:2|intcomma }}</td>
+                            <td>${{ stats|get_item:"50%"|floatformat:2|intcomma }}</td>
+                            <td>${{ stats|get_item:"75%"|floatformat:2|intcomma }}</td>
+                            <td>${{ stats.max|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Categorical Summary -->
+        {% if analysis.categorical_summary %}
+        <div class="data-table">
+            <h5 class="mb-3">
+                <i class="fas fa-chart-bar"></i>
+                Categorical Summary
+            </h5>
+            {% for column, value_counts in analysis.categorical_summary.items %}
+            <div class="mb-4">
+                <h6>{{ column|title }}</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Value</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for value, count in value_counts.items %}
+                            <tr>
+                                <td>{{ value|truncatechars:50 }}</td>
+                                <td>{{ count|intcomma }}</td>
+                                <td>{{ count|div:analysis.shape.rows|mul:100|floatformat:1 }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Export Options -->
+        <div class="export-buttons">
+            <h5 class="mb-3">
+                <i class="fas fa-download"></i>
+                Export Data
+            </h5>
+            <p class="text-muted mb-3">Download the combined data in various formats</p>
+            <div>
+                <a href="?{% for key, value in filters.items %}{{ key }}={{ value }}&{% endfor %}format=csv" 
+                   class="btn btn-export">
+                    <i class="fas fa-file-csv"></i> Download CSV
+                </a>
+                <a href="?{% for key, value in filters.items %}{{ key }}={{ value }}&{% endfor %}format=parquet" 
+                   class="btn btn-export">
+                    <i class="fas fa-file"></i> Download Parquet
+                </a>
+                <a href="?{% for key, value in filters.items %}{{ key }}={{ value }}&{% endfor %}format=json" 
+                   class="btn btn-export">
+                    <i class="fas fa-file-code"></i> Download JSON
+                </a>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            No data available for the selected criteria. Please try different filters.
+        </div>
+    {% endif %}
+</div>
+
+<script>
+// Add any interactive charts or visualizations here
+$(document).ready(function() {
+    // Initialize any interactive elements
+    console.log('Analysis page loaded');
+});
+</script>
+{% endblock %}

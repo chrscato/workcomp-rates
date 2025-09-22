@@ -308,11 +308,13 @@ class ParquetDataManager:
                 FROM commercial_rates
                 WHERE {where_sql}
                 AND {column} IS NOT NULL
+                AND {column} != ''
+                AND {column} != 'None'
                 ORDER BY {column}
             """
             
             result = con.execute(query).fetchall()
-            return [r[0] for r in result if r[0]]  # Filter out None/empty values
+            return [r[0] for r in result if r[0] and str(r[0]).strip() and str(r[0]).lower() != 'none']  # Filter out None/empty values and string "None"
             
         except Exception as e:
             logger.error(f"Error getting unique values for {column}: {str(e)}")

@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Commercial Rate Insights - WorkComp Rates{% endblock %}
+
+{% block extra_head %}
+<!-- Select2 for enhanced dropdowns -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+    .filter-tier {
+        margin-bottom: 2rem;
+    }
+    
+    .filter-tier .card {
+        border: 1px solid #dee2e6;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .filter-tier .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .filter-tier-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0;
+        color: #495057;
+    }
+    
+    .partition-summary .card {
+        border: 1px solid #dee2e6;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .summary-metric {
+        text-align: center;
+        padding: 1rem;
+    }
+    
+    .summary-metric h3 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #0d6efd;
+        margin-bottom: 0.5rem;
+    }
+    
+    .summary-metric p {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin: 0;
+    }
+    
+    .form-select {
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        background: white;
+        color: #495057;
+        transition: all 0.15s ease-in-out;
+    }
+    
+    .form-select:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .form-select:hover {
+        border-color: #adb5bd;
+    }
+    
+    
+    .form-select.is-invalid {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+    
+    .form-text {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-0">Commercial Rate Insights</h4>
+                        <p class="text-muted mb-0">Tile-based partition discovery and analysis</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'commercial_rate_insights_map' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-map"></i> Legacy Map View
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if error_message %}
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ error_message }}
+        </div>
+    {% endif %}
+
+    <!-- Partition Summary -->
+    {% if partition_summary.partition_count > 0 %}
+    <div class="partition-summary">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up text-success me-2"></i>
+                    Search Results
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="summary-metric">
+                            <h3>{{ partition_summary.partition_count }}</h3>
+                            <p>Partitions Found</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-metric">
+                            <h3>{{ partition_summary.total_size_mb|floatformat:1 }} MB</h3>
+                            <p>Total Size</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-metric">
+                            <h3>{{ partition_summary.total_estimated_records|intcomma }}</h3>
+                            <p>Estimated Records</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="summary-metric">
+                            {% if has_required_filters %}
+                   <a href="{% url 'dataset_review_loading' %}?{% for key, value in current_filters.items %}{{ key }}={{ value }}&{% endfor %}" 
+                      class="btn btn-primary btn-lg">
+                                    <i class="bi bi-search me-2"></i> Review Dataset
+                                </a>
+                            {% else %}
+                                <button class="btn btn-outline-secondary btn-lg" disabled>
+                                    <i class="bi bi-lock me-2"></i> Select Required Filters
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Hierarchical Filters -->
+    <form method="get" id="filterForm">
+        <!-- Required Filters (Tier 1) -->
+        <div class="filter-tier">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="filter-tier-title">
+                        <i class="bi bi-exclamation-circle text-danger me-2"></i>
+                        Required Filters (Select all three to search)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="payer_slug" class="form-label fw-bold">
+                        <i class="bi bi-building text-primary me-1"></i> Payer *
+                    </label>
+                    <select class="form-select" id="payer_slug" name="payer_slug" required>
+                        <option value="">Choose a Payer</option>
+                        {% for option in filter_options.payer_slug %}
+                            {% with option_parts=option|split:'|' %}
+                            <option value="{{ option_parts|first }}" 
+                                    {% if current_filters.payer_slug == option_parts|first %}selected{% endif %}>
+                                {{ option_parts|last }}
+                            </option>
+                            {% endwith %}
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.payer_slug|length }} payer(s) available</small>
+                </div>
+                <div class="col-md-4">
+                    <label for="state" class="form-label fw-bold">
+                        <i class="bi bi-geo-alt text-info me-1"></i> State *
+                    </label>
+                    <select class="form-select" id="state" name="state" required>
+                        <option value="">Choose a State</option>
+                        {% for state in filter_options.state %}
+                            <option value="{{ state }}" 
+                                    {% if current_filters.state == state %}selected{% endif %}>
+                                {{ state }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.state|length }} state(s) available</small>
+                </div>
+                <div class="col-md-4">
+                    <label for="billing_class" class="form-label fw-bold">
+                        <i class="bi bi-file-text text-warning me-1"></i> Billing Class *
+                    </label>
+                    <select class="form-select" id="billing_class" name="billing_class" required>
+                        <option value="">Choose Billing Class</option>
+                        {% for billing_class in filter_options.billing_class %}
+                            <option value="{{ billing_class }}" 
+                                    {% if current_filters.billing_class == billing_class %}selected{% endif %}>
+                                {{ billing_class|title }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.billing_class|length }} billing class(es) available</small>
+                </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional Filters (Tier 2) -->
+        <div class="filter-tier">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="filter-tier-title">
+                        <i class="bi bi-funnel text-warning me-2"></i>
+                        Optional Filters (Refine your search)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="procedure_set" class="form-label fw-bold">
+                        <i class="bi bi-clipboard-pulse text-success me-1"></i> Procedure Set
+                    </label>
+                    <select class="form-select" id="procedure_set" name="procedure_set">
+                        <option value="">All Procedure Sets</option>
+                        {% for procedure_set in filter_options.procedure_set %}
+                            <option value="{{ procedure_set }}" 
+                                    {% if current_filters.procedure_set == procedure_set %}selected{% endif %}>
+                                {{ procedure_set }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.procedure_set|length }} procedure set(s) available</small>
+                </div>
+                <div class="col-md-4">
+                    <label for="taxonomy_desc" class="form-label fw-bold">
+                        <i class="bi bi-person-badge text-danger me-1"></i> Taxonomy Description
+                    </label>
+                    <select class="form-select" id="taxonomy_desc" name="taxonomy_desc">
+                        <option value="">All Descriptions</option>
+                        {% for desc in filter_options.taxonomy_desc %}
+                            <option value="{{ desc }}" 
+                                    {% if current_filters.taxonomy_desc == desc %}selected{% endif %}>
+                                {{ desc }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.taxonomy_desc|length }} description(s) available</small>
+                </div>
+                    </div>
+                    <div class="row g-3 mt-3">
+                <div class="col-md-4">
+                    <label for="taxonomy_code" class="form-label fw-bold">
+                        <i class="bi bi-hash text-info me-1"></i> Taxonomy Code
+                    </label>
+                    <select class="form-select" id="taxonomy_code" name="taxonomy_code">
+                        <option value="">All Codes</option>
+                        {% for code in filter_options.taxonomy_code %}
+                            <option value="{{ code }}" 
+                                    {% if current_filters.taxonomy_code == code %}selected{% endif %}>
+                                {{ code }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.taxonomy_code|length }} code(s) available</small>
+                </div>
+                <div class="col-md-4">
+                    <label for="stat_area_name" class="form-label fw-bold">
+                        <i class="bi bi-geo text-secondary me-1"></i> Statistical Area
+                    </label>
+                    <select class="form-select" id="stat_area_name" name="stat_area_name">
+                        <option value="">All Areas</option>
+                        {% for area in filter_options.stat_area_name %}
+                            <option value="{{ area }}" 
+                                    {% if current_filters.stat_area_name == area %}selected{% endif %}>
+                                {{ area }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.stat_area_name|length }} area(s) available</small>
+                </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Temporal Filters (Tier 3) -->
+        <div class="filter-tier">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="filter-tier-title">
+                        <i class="bi bi-calendar text-info me-2"></i>
+                        Time Period (Optional)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="year" class="form-label fw-bold">
+                        <i class="bi bi-calendar-year text-info me-1"></i> Year
+                    </label>
+                    <select class="form-select" id="year" name="year">
+                        <option value="">All Years</option>
+                        {% for year in filter_options.year %}
+                            <option value="{{ year }}" 
+                                    {% if current_filters.year == year %}selected{% endif %}>
+                                {{ year }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.year|length }} year(s) available</small>
+                </div>
+                <div class="col-md-6">
+                    <label for="month" class="form-label fw-bold">
+                        <i class="bi bi-calendar-month text-info me-1"></i> Month
+                    </label>
+                    <select class="form-select" id="month" name="month">
+                        <option value="">All Months</option>
+                        {% for month in filter_options.month %}
+                            <option value="{{ month }}" 
+                                    {% if current_filters.month == month %}selected{% endif %}>
+                                {{ month }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">{{ filter_options.month|length }} month(s) available</small>
+                </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Actions -->
+        <div class="row mt-4">
+            <div class="col-12 text-center">
+                <button type="submit" class="btn btn-primary btn-lg me-3">
+                    <i class="bi bi-search me-2"></i> Search Partitions
+                </button>
+                <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-secondary btn-lg">
+                    <i class="bi bi-x-circle me-2"></i> Clear All Filters
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Data Availability Visualization -->
+    {% if partition_summary.partition_count > 0 %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart text-primary me-2"></i> 
+                        Data Availability Overview ({{ partition_summary.partition_count }} partitions, {{ partition_summary.total_estimated_records|intcomma }} records)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Summary Stats -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h3 text-primary mb-1">{{ partition_summary.partition_count }}</div>
+                                <small class="text-muted">Partitions</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h3 text-success mb-1">{{ partition_summary.total_estimated_records|intcomma }}</div>
+                                <small class="text-muted">Total Records</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h3 text-info mb-1">{{ partition_summary.total_size_mb|floatformat:1 }} MB</div>
+                                <small class="text-muted">Data Size</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h3 text-warning mb-1">{{ partition_summary.available_filters|length }}</div>
+                                <small class="text-muted">Filter Options</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Available Filter Options -->
+                    <div class="row">
+                        {% for filter_name, options in partition_summary.available_filters.items %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title text-capitalize">
+                                        <i class="bi bi-funnel text-info me-1"></i>
+                                        {{ filter_name|humanize_field_name }}
+                                    </h6>
+                                    <div class="mb-2">
+                                        <span class="badge bg-primary">{{ options|length }} options</span>
+                                    </div>
+                                    <div class="filter-options-preview" style="max-height: 120px; overflow-y: auto;">
+                                        {% for option in options|slice:":10" %}
+                                        <span class="badge bg-light text-dark me-1 mb-1">{{ option }}</span>
+                                        {% endfor %}
+                                        {% if options|length > 10 %}
+                                        <span class="badge bg-secondary">+{{ options|length|add:"-10" }} more</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Data Distribution Charts -->
+                    {% if partition_summary.available_filters.procedure_set %}
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-pie-chart text-success me-1"></i>
+                                        Procedure Sets Distribution
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="procedureSetChart" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-bar-chart text-info me-1"></i>
+                                        Statistical Areas Distribution
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="statAreaChart" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Time Period Distribution -->
+                    {% if partition_summary.available_filters.year or partition_summary.available_filters.month %}
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-calendar text-warning me-1"></i>
+                                        Time Period Distribution
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        {% if partition_summary.available_filters.year %}
+                                        <div class="col-md-6">
+                                            <h6>Years Available</h6>
+                                            <div class="d-flex flex-wrap">
+                                                {% for year in partition_summary.available_filters.year %}
+                                                <span class="badge bg-warning me-1 mb-1">{{ year }}</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        {% if partition_summary.available_filters.month %}
+                                        <div class="col-md-6">
+                                            <h6>Months Available</h6>
+                                            <div class="d-flex flex-wrap">
+                                                {% for month in partition_summary.available_filters.month %}
+                                                <span class="badge bg-info me-1 mb-1">{{ month }}</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Initialize Select2 for better UX
+    $('.form-select').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: function() {
+            return $(this).find('option:first').text();
+        }
+    });
+    
+    // Add form validation
+    $('#filterForm').on('submit', function(e) {
+        const requiredFields = ['payer_slug', 'state', 'billing_class'];
+        let isValid = true;
+        
+        requiredFields.forEach(function(field) {
+            const value = $('#' + field).val();
+            if (!value) {
+                $('#' + field).addClass('is-invalid');
+                isValid = false;
+            } else {
+                $('#' + field).removeClass('is-invalid');
+            }
+        });
+        
+        if (!isValid) {
+            e.preventDefault();
+            alert('Please select all required filters: Payer, State, and Billing Class');
+        }
+    });
+
+    // Create charts if data is available
+    {% if partition_summary.available_filters.procedure_set %}
+    createProcedureSetChart();
+    {% endif %}
+    
+    {% if partition_summary.available_filters.stat_area_name %}
+    createStatAreaChart();
+    {% endif %}
+});
+
+{% if partition_summary.available_filters.procedure_set %}
+function createProcedureSetChart() {
+    const ctx = document.getElementById('procedureSetChart').getContext('2d');
+    const data = {{ partition_summary.available_filters.procedure_set|safe }};
+    
+    // Create a simple count chart (since we don't have actual counts, we'll show equal distribution)
+    const labels = data;
+    const values = new Array(data.length).fill(1); // Equal distribution for now
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            }
+        }
+    });
+}
+{% endif %}
+
+{% if partition_summary.available_filters.stat_area_name %}
+function createStatAreaChart() {
+    const ctx = document.getElementById('statAreaChart').getContext('2d');
+    const data = {{ partition_summary.available_filters.stat_area_name|safe }};
+    
+    // Show top 10 areas to avoid overcrowding
+    const topAreas = data.slice(0, 10);
+    const values = new Array(topAreas.length).fill(1);
+    
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: topAreas,
+            datasets: [{
+                label: 'Available Data',
+                data: values,
+                backgroundColor: '#36A2EB',
+                borderColor: '#36A2EB',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+{% endif %}
+</script>
+{% endblock %}

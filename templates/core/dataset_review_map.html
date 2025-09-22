@@ -1,0 +1,466 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Dataset Map View - Commercial Rate Insights{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">Dataset Map View</h1>
+                    <p class="text-muted mb-0">Geographic distribution of negotiated rates</p>
+                </div>
+                <div>
+                    <a href="{% url 'dataset_review' %}?{{ request.GET.urlencode }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-table"></i> Back to Table View
+                    </a>
+                    <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Selection
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if has_data and sample_data %}
+        <!-- Map Controls -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body py-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-2">
+                                <label class="form-label">Rate Range:</label>
+                                <div class="d-flex gap-1">
+                                    <input type="number" id="minRate" class="form-control form-control-sm" placeholder="Min" step="0.01">
+                                    <input type="number" id="maxRate" class="form-control form-control-sm" placeholder="Max" step="0.01">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Taxonomy:</label>
+                                <select id="taxonomyFilter" class="form-select form-select-sm">
+                                    <option value="all">All Taxonomies</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Proc Class:</label>
+                                <select id="procClassFilter" class="form-select form-select-sm">
+                                    <option value="all">All Classes</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Proc Group:</label>
+                                <select id="procGroupFilter" class="form-select form-select-sm">
+                                    <option value="all">All Groups</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Actions:</label>
+                                <div class="d-flex gap-1">
+                                    <button id="applyFilters" class="btn btn-sm btn-primary">Apply</button>
+                                    <button id="resetMap" class="btn btn-sm btn-outline-secondary">Reset</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div id="map" style="height: 600px; width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Legend -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body py-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Rate Distribution</h6>
+                                <div id="rateStats" class="small text-muted">
+                                    <!-- Rate statistics will be populated here -->
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Legend</h6>
+                                <div id="mapLegend">
+                                    <!-- Legend will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="alert alert-warning">
+            <h4>No Data Available</h4>
+            <p>No location data found for mapping. Make sure your dataset includes latitude and longitude coordinates.</p>
+            <a href="{% url 'dataset_review' %}?{{ request.GET.urlencode }}" class="btn btn-primary">Back to Dataset Review</a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Leaflet MarkerCluster CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+
+<script>
+// Data from Django
+const mapData = {{ sample_data|safe }};
+const totalRecords = {{ combined_df_info.shape.0|default:0 }};
+
+// Debug: Log the data to console
+console.log('Map data loaded:', mapData.length, 'records');
+console.log('Sample record:', mapData[0]);
+
+// Initialize map
+let map;
+let markersLayer;
+let markerClusterGroup;
+let allMarkers = []; // Store all markers for filtering
+
+function initializeMap() {
+    // Create map centered on the US
+    map = L.map('map').setView([39.8283, -98.5795], 4);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18
+    }).addTo(map);
+    
+    // Initialize marker cluster group
+    markerClusterGroup = L.markerClusterGroup({
+        chunkedLoading: true,
+        maxClusterRadius: 50
+    });
+    
+    map.addLayer(markerClusterGroup);
+    
+    // Populate filter dropdowns
+    populateFilterDropdowns();
+    
+    // Add markers
+    addMarkersToMap();
+    
+    // Update legend
+    updateLegend();
+    updateStats();
+}
+
+function populateFilterDropdowns() {
+    if (!mapData || !Array.isArray(mapData)) return;
+    
+    // Get unique values for each filter
+    const taxonomies = [...new Set(mapData.map(item => item.primary_taxonomy_desc).filter(Boolean))].sort();
+    const procClasses = [...new Set(mapData.map(item => item.proc_class).filter(Boolean))].sort();
+    const procGroups = [...new Set(mapData.map(item => item.proc_group).filter(Boolean))].sort();
+    
+    // Populate taxonomy dropdown
+    const taxonomySelect = document.getElementById('taxonomyFilter');
+    if (taxonomySelect) {
+        taxonomySelect.innerHTML = '<option value="all">All Taxonomies</option>';
+        taxonomies.forEach(taxonomy => {
+            const option = document.createElement('option');
+            option.value = taxonomy;
+            option.textContent = taxonomy.length > 30 ? taxonomy.substring(0, 30) + '...' : taxonomy;
+            taxonomySelect.appendChild(option);
+        });
+    }
+    
+    // Populate procedure class dropdown
+    const procClassSelect = document.getElementById('procClassFilter');
+    if (procClassSelect) {
+        procClassSelect.innerHTML = '<option value="all">All Classes</option>';
+        procClasses.forEach(procClass => {
+            const option = document.createElement('option');
+            option.value = procClass;
+            option.textContent = procClass;
+            procClassSelect.appendChild(option);
+        });
+    }
+    
+    // Populate procedure group dropdown
+    const procGroupSelect = document.getElementById('procGroupFilter');
+    if (procGroupSelect) {
+        procGroupSelect.innerHTML = '<option value="all">All Groups</option>';
+        procGroups.forEach(procGroup => {
+            const option = document.createElement('option');
+            option.value = procGroup;
+            option.textContent = procGroup;
+            procGroupSelect.appendChild(option);
+        });
+    }
+    
+    console.log(`Populated filters: ${taxonomies.length} taxonomies, ${procClasses.length} proc classes, ${procGroups.length} proc groups`);
+}
+
+function getMarkerColor(rate, rates) {
+    if (!rate || rate === null) return '#cccccc';
+    
+    // Use a simple blue color scheme
+    const blueColors = ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'];
+    const sortedRates = [...new Set(rates)].sort((a, b) => a - b);
+    const percentile = sortedRates.indexOf(rate) / sortedRates.length;
+    
+    if (percentile < 0.2) return blueColors[0];
+    if (percentile < 0.4) return blueColors[1];
+    if (percentile < 0.6) return blueColors[2];
+    if (percentile < 0.8) return blueColors[3];
+    return blueColors[4];
+}
+
+function createCustomIcon(rate, color) {
+    return L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="
+            background-color: ${color};
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        "></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
+}
+
+function addMarkersToMap() {
+    // Clear existing markers
+    markerClusterGroup.clearLayers();
+    allMarkers = [];
+    
+    // Check if mapData exists and is valid
+    if (!mapData || !Array.isArray(mapData)) {
+        console.error('Invalid map data:', mapData);
+        return;
+    }
+    
+    // Get filter values
+    const minRate = parseFloat(document.getElementById('minRate')?.value) || 0;
+    const maxRate = parseFloat(document.getElementById('maxRate')?.value) || Infinity;
+    const taxonomyFilter = document.getElementById('taxonomyFilter')?.value || 'all';
+    const procClassFilter = document.getElementById('procClassFilter')?.value || 'all';
+    const procGroupFilter = document.getElementById('procGroupFilter')?.value || 'all';
+    
+    // Filter data for locations with valid coordinates and apply filters
+    const validData = mapData.filter(item => {
+        if (!item) return false;
+        
+        const lat = parseFloat(item.latitude);
+        const lng = parseFloat(item.longitude);
+        
+        // Check coordinates
+        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 || lat === 0 || lng === 0) {
+            return false;
+        }
+        
+        // Apply filters
+        const rate = parseFloat(item.negotiated_rate) || 0;
+        if (rate < minRate || rate > maxRate) return false;
+        
+        if (taxonomyFilter !== 'all' && item.primary_taxonomy_desc !== taxonomyFilter) return false;
+        if (procClassFilter !== 'all' && item.proc_class !== procClassFilter) return false;
+        if (procGroupFilter !== 'all' && item.proc_group !== procGroupFilter) return false;
+        
+        return true;
+    });
+    
+    if (validData.length === 0) {
+        console.log('No valid location data found');
+        return;
+    }
+    
+    // Get all rates for color scaling
+    const rates = validData.map(item => parseFloat(item.negotiated_rate)).filter(rate => !isNaN(rate));
+    
+    // Add markers
+    validData.forEach(item => {
+        const lat = parseFloat(item.latitude);
+        const lng = parseFloat(item.longitude);
+        const rate = parseFloat(item.negotiated_rate);
+        
+        const color = getMarkerColor(rate, rates);
+        const icon = createCustomIcon(rate, color);
+        
+        const marker = L.marker([lat, lng], { icon: icon });
+        
+        // Create popup content
+        const popupContent = `
+            <div class="map-popup">
+                <h6><strong>${item.organization_name || 'Unknown Organization'}</strong></h6>
+                <p class="mb-1"><strong>Rate:</strong> $${rate ? rate.toFixed(2) : 'N/A'}</p>
+                <p class="mb-1"><strong>Location:</strong> ${item.county_name || 'Unknown'}, ${item.state || 'Unknown'}</p>
+                <p class="mb-1"><strong>Code:</strong> ${item.code || 'N/A'}</p>
+                <p class="mb-1"><strong>Description:</strong> ${item.code_description || 'N/A'}</p>
+                <p class="mb-0"><strong>Taxonomy:</strong> ${item.primary_taxonomy_desc || 'N/A'}</p>
+            </div>
+        `;
+        
+        marker.bindPopup(popupContent);
+        markerClusterGroup.addLayer(marker);
+    });
+    
+    // Fit map to show all markers
+    if (validData.length > 0) {
+        const group = new L.featureGroup(markerClusterGroup.getLayers());
+        map.fitBounds(group.getBounds().pad(0.1));
+    }
+    
+    console.log(`Added ${validData.length} markers to map`);
+}
+
+function updateLegend() {
+    // Use fixed blue color scheme
+    const colors = ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'];
+    
+    // Get rate statistics for legend
+    const rates = mapData
+        .map(item => parseFloat(item.negotiated_rate))
+        .filter(rate => !isNaN(rate))
+        .sort((a, b) => a - b);
+    
+    if (rates.length === 0) return;
+    
+    const min = rates[0];
+    const max = rates[rates.length - 1];
+    const step = (max - min) / 5;
+    
+    const legendHtml = `
+        <div class="d-flex align-items-center gap-2">
+            ${colors.map((color, index) => `
+                <div class="d-flex align-items-center">
+                    <div style="width: 12px; height: 12px; background-color: ${color}; border-radius: 50%; border: 1px solid #ccc;"></div>
+                    <small class="ms-1">$${(min + step * index).toFixed(0)}</small>
+                </div>
+            `).join('')}
+            <small class="ms-2"><strong>$${max.toFixed(0)}</strong></small>
+        </div>
+    `;
+    
+    document.getElementById('mapLegend').innerHTML = legendHtml;
+}
+
+function updateStats() {
+    const rates = mapData
+        .map(item => parseFloat(item.negotiated_rate))
+        .filter(rate => !isNaN(rate));
+    
+    if (rates.length === 0) {
+        document.getElementById('rateStats').innerHTML = 'No rate data available';
+        return;
+    }
+    
+    const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+    const min = Math.min(...rates);
+    const max = Math.max(...rates);
+    
+    document.getElementById('rateStats').innerHTML = `
+        <div class="row">
+            <div class="col-3"><strong>Average:</strong> $${avg.toFixed(2)}</div>
+            <div class="col-3"><strong>Min:</strong> $${min.toFixed(2)}</div>
+            <div class="col-3"><strong>Max:</strong> $${max.toFixed(2)}</div>
+            <div class="col-3"><strong>Count:</strong> ${rates.length}</div>
+        </div>
+    `;
+}
+
+// Event listeners
+const applyFiltersEl = document.getElementById('applyFilters');
+if (applyFiltersEl) {
+    applyFiltersEl.addEventListener('click', function() {
+        addMarkersToMap();
+        updateLegend();
+        updateStats();
+    });
+}
+
+// Color scale removed - using fixed blue scheme
+
+const resetMapEl = document.getElementById('resetMap');
+if (resetMapEl) {
+    resetMapEl.addEventListener('click', function() {
+        // Reset all filters
+        document.getElementById('minRate').value = '';
+        document.getElementById('maxRate').value = '';
+        document.getElementById('taxonomyFilter').value = 'all';
+        document.getElementById('procClassFilter').value = 'all';
+        document.getElementById('procGroupFilter').value = 'all';
+        
+        if (map) {
+            map.setView([39.8283, -98.5795], 4);
+            addMarkersToMap();
+            updateLegend();
+            updateStats();
+        }
+    });
+}
+
+// Initialize map when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing map...');
+    console.log('Map data:', mapData);
+    
+    if (mapData && Array.isArray(mapData) && mapData.length > 0) {
+        console.log('Initializing map with', mapData.length, 'records');
+        initializeMap();
+    } else {
+        console.warn('No valid map data available');
+        // Show a message in the map container
+        const mapContainer = document.getElementById('map');
+        if (mapContainer) {
+            mapContainer.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; background-color: #f8f9fa;">
+                    <div class="text-center">
+                        <h5 class="text-muted">No Location Data Available</h5>
+                        <p class="text-muted">No valid latitude/longitude coordinates found in the dataset.</p>
+                        <a href="{% url 'dataset_review' %}?{{ request.GET.urlencode }}" class="btn btn-primary">Back to Table View</a>
+                    </div>
+                </div>
+            `;
+        }
+    }
+});
+</script>
+
+<style>
+.custom-marker {
+    background: transparent !important;
+    border: none !important;
+}
+
+.map-popup {
+    min-width: 200px;
+}
+
+.map-popup h6 {
+    color: #007bff;
+    margin-bottom: 8px;
+}
+
+.map-popup p {
+    margin-bottom: 4px;
+    font-size: 0.9em;
+}
+</style>
+{% endblock %}

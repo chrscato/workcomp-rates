@@ -2,10 +2,12 @@ import json
 import logging
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
+from django.conf import settings
 from datetime import timedelta
 from .utils.parquet_utils import ParquetDataManager
+from .utils.partition_navigator import PartitionNavigator
 from .models import UserActivity
 from django.db import models
 import pandas as pd
@@ -19,6 +21,190 @@ logger = logging.getLogger(__name__)
 def home(request):
     """Home page with dashboard overview."""
     return render(request, 'core/home.html')
+
+
+@login_required
+def commercial_rate_insights_tile(request):
+    """
+    Tile-based Commercial Rate Insights Landing Page
+    Implements hierarchical filtering system for partition discovery
+    """
+    try:
+        # Initialize partition navigator
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db',
+            s3_bucket='partitioned-data'  # Update with your actual bucket
+        )
+        
+        # Get filter options
+        filter_options = navigator.get_filter_options()
+        
+        # Debug logging
+        logger.info(f"Filter options loaded: {[(k, len(v)) for k, v in filter_options.items()]}")
+        
+        # Get current filters from request
+        current_filters = {
+            'payer_slug': request.GET.get('payer_slug'),
+            'state': request.GET.get('state'),
+            'billing_class': request.GET.get('billing_class'),
+            'procedure_set': request.GET.get('procedure_set'),
+            'taxonomy_code': request.GET.get('taxonomy_code'),
+            'taxonomy_desc': request.GET.get('taxonomy_desc'),
+            'stat_area_name': request.GET.get('stat_area_name'),
+            'year': request.GET.get('year'),
+            'month': request.GET.get('month')
+        }
+        
+        # Remove empty filters
+        current_filters = {k: v for k, v in current_filters.items() if v}
+        
+        # Get partition summary
+        partition_summary = navigator.get_partition_summary(current_filters)
+        
+        context = {
+            'filter_options': filter_options,
+            'current_filters': current_filters,
+            'partition_summary': partition_summary,
+            'has_required_filters': all(current_filters.get(f) for f in navigator.required_filters)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in commercial_rate_insights_tile view: {str(e)}")
+        context = {
+            'filter_options': {},
+            'current_filters': {},
+            'partition_summary': {'partition_count': 0, 'total_size_mb': 0, 'total_estimated_records': 0},
+            'has_required_filters': False,
+            'error_message': 'An error occurred while loading the partition navigator.'
+        }
+    
+    return render(request, 'core/commercial_rate_insights_tile.html', context)
+
+
+@login_required
+def debug_filter_options(request):
+    """
+    Debug view to check filter options loading
+    """
+    try:
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db',
+            s3_bucket='partitioned-data'
+        )
+        
+        filter_options = navigator.get_filter_options()
+        
+        debug_info = {}
+        for category, options in filter_options.items():
+            debug_info[category] = {
+                'count': len(options),
+                'sample': options[:5] if options else [],
+                'types': list(set(type(opt).__name__ for opt in options[:5])) if options else []
+            }
+        
+        return JsonResponse(debug_info, json_dumps_params={'indent': 2})
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def debug_s3_connection(request):
+    """
+    Debug view to test S3 connection and partition access
+    """
+    debug_info = {
+        'environment_check': {},
+        's3_connection': {},
+        'database_check': {},
+        'partition_access': {},
+        'errors': []
+    }
+    
+    try:
+        # Check environment variables
+        debug_info['environment_check'] = {
+            'aws_access_key_id': 'Set' if getattr(settings, 'AWS_ACCESS_KEY_ID', None) else 'Missing',
+            'aws_secret_access_key': 'Set' if getattr(settings, 'AWS_SECRET_ACCESS_KEY', None) else 'Missing',
+            'aws_default_region': getattr(settings, 'AWS_DEFAULT_REGION', 'Not set'),
+            'aws_s3_bucket': getattr(settings, 'AWS_S3_BUCKET', 'Not set'),
+        }
+        
+        # Test S3 connection
+        navigator = PartitionNavigator(db_path='core/data/partition_navigation.db')
+        s3_client = navigator.connect_s3()
+        
+        if s3_client:
+            try:
+                # Test bucket access
+                bucket_name = navigator.s3_bucket
+                s3_client.head_bucket(Bucket=bucket_name)
+                debug_info['s3_connection']['bucket_access'] = f'✅ Bucket {bucket_name} is accessible'
+                
+                # List some objects
+                response = s3_client.list_objects_v2(Bucket=bucket_name, MaxKeys=5)
+                if 'Contents' in response:
+                    debug_info['s3_connection']['sample_objects'] = [
+                        obj['Key'] for obj in response['Contents']
+                    ]
+                else:
+                    debug_info['s3_connection']['sample_objects'] = 'No objects found'
+                    
+            except Exception as e:
+                debug_info['s3_connection']['bucket_access'] = f'❌ Bucket access failed: {str(e)}'
+                debug_info['errors'].append(f'S3 bucket access error: {str(e)}')
+        else:
+            debug_info['s3_connection']['bucket_access'] = '❌ S3 client creation failed'
+            debug_info['errors'].append('S3 client creation failed')
+        
+        # Check database
+        try:
+            conn = navigator.connect_db()
+            partitions_count = conn.execute("SELECT COUNT(*) FROM partitions").fetchone()[0]
+            debug_info['database_check']['partitions_count'] = partitions_count
+            
+            # Get sample partitions
+            sample_partitions = conn.execute(
+                "SELECT s3_bucket, s3_key FROM partitions LIMIT 3"
+            ).fetchall()
+            debug_info['database_check']['sample_partitions'] = [
+                {'bucket': row['s3_bucket'], 'key': row['s3_key']} 
+                for row in sample_partitions
+            ]
+            
+        except Exception as e:
+            debug_info['database_check']['error'] = str(e)
+            debug_info['errors'].append(f'Database error: {str(e)}')
+        
+        # Test partition access
+        if s3_client and 'sample_partitions' in debug_info['database_check']:
+            partition_tests = []
+            for partition in debug_info['database_check']['sample_partitions']:
+                try:
+                    response = s3_client.head_object(
+                        Bucket=partition['bucket'], 
+                        Key=partition['key']
+                    )
+                    size_mb = response['ContentLength'] / 1024 / 1024
+                    partition_tests.append({
+                        'path': f"s3://{partition['bucket']}/{partition['key']}",
+                        'status': '✅ Accessible',
+                        'size_mb': round(size_mb, 2)
+                    })
+                except Exception as e:
+                    partition_tests.append({
+                        'path': f"s3://{partition['bucket']}/{partition['key']}",
+                        'status': f'❌ Error: {str(e)}',
+                        'size_mb': None
+                    })
+            
+            debug_info['partition_access'] = partition_tests
+        
+    except Exception as e:
+        debug_info['errors'].append(f'General error: {str(e)}')
+        logger.error(f"Debug S3 connection error: {str(e)}")
+    
+    return JsonResponse(debug_info, json_dumps_params={'indent': 2})
 
 
 @login_required
@@ -548,6 +734,7 @@ def commercial_rate_insights_overview(request, state_code):
             'org_name': request.GET.getlist('org_name'),
             'procedure_set': request.GET.getlist('procedure_set'),
             'primary_taxonomy_desc': request.GET.getlist('primary_taxonomy_desc'),
+            'primary_taxonomy_code': request.GET.getlist('primary_taxonomy_code'),
             'tin_value': request.GET.getlist('tin_value'),
         }
         
@@ -566,6 +753,7 @@ def commercial_rate_insights_overview(request, state_code):
             'organizations': data_manager.get_unique_values('org_name', active_prefilters),
             'procedure_sets': data_manager.get_unique_values('procedure_set', active_prefilters),
             'primary_taxonomy_descs': data_manager.get_unique_values('primary_taxonomy_desc', active_prefilters),
+            'primary_taxonomy_codes': data_manager.get_unique_values('primary_taxonomy_code', active_prefilters),
             'tin_values': data_manager.get_unique_values('tin_value', active_prefilters),
         }
         
@@ -750,6 +938,483 @@ def api_sample_data(request, state_code):
     except Exception as e:
         logger.error(f"Error in api_sample_data: {str(e)}")
         return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+@login_required
+def dataset_review_map(request):
+    """
+    Map view for dataset review showing geographic distribution of rates
+    """
+    try:
+        # Initialize partition navigator
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db'
+        )
+        
+        # Get filters from request (preserve multi-selects with getlist)
+        filters = {
+            # Primary required filters (single values)
+            'payer_slug': request.GET.get('payer_slug'),
+            'state': request.GET.get('state'),
+            'billing_class': request.GET.get('billing_class'),
+            # Partition-level optional filter
+            'procedure_set': request.GET.get('procedure_set'),
+            # Additional analysis filters (may be multi-valued)
+            'taxonomy_code': request.GET.getlist('taxonomy_code') or request.GET.get('taxonomy_code'),
+            'taxonomy_desc': request.GET.getlist('taxonomy_desc') or request.GET.get('taxonomy_desc'),
+            'stat_area_name': request.GET.getlist('stat_area_name') or request.GET.get('stat_area_name'),
+            'county_name': request.GET.getlist('county_name') or request.GET.get('county_name'),
+            'proc_class': request.GET.getlist('proc_class') or request.GET.get('proc_class'),
+            'proc_group': request.GET.getlist('proc_group') or request.GET.get('proc_group'),
+            'code': request.GET.getlist('code') or request.GET.get('code'),
+            # Time filters
+            'year': request.GET.get('year'),
+            'month': request.GET.get('month')
+        }
+        
+        # Remove empty filters
+        filters = {k: v for k, v in filters.items() if v}
+        
+        # Validate required filters
+        if not all(filters.get(f) for f in navigator.required_filters):
+            return render(request, 'core/error.html', {
+                'error_message': 'Please select all required filters: Payer, State, and Billing Class'
+            })
+        
+        # Build partition filters (only those relevant to partition discovery)
+        partition_filters = {
+            'payer_slug': filters.get('payer_slug'),
+            'state': filters.get('state'),
+            'billing_class': filters.get('billing_class'),
+            'procedure_set': filters.get('procedure_set'),
+            'year': filters.get('year'),
+            'month': filters.get('month'),
+        }
+
+        # Search for partitions using only relevant filters
+        partitions_df = navigator.search_partitions({k: v for k, v in partition_filters.items() if v})
+        
+        if partitions_df.empty:
+            return render(request, 'core/error.html', {
+                'error_message': 'No partitions found matching the selected criteria'
+            })
+        
+        # Get S3 paths for combination
+        s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
+        
+        # Define required columns (same as dataset_review)
+        required_columns = [
+            'state', 'year_month', 'payer_slug', 'billing_class', 'code_type', 'code',
+            'negotiated_type', 'negotiation_arrangement', 'negotiated_rate',
+            'reporting_entity_name', 'code_description', 'code_name', 'proc_set', 'proc_class',
+            'proc_group', 'version', 'npi', 'organization_name', 'primary_taxonomy_code',
+            'credential', 'enumeration_date', 'primary_taxonomy_state', 'first_name',
+            'primary_taxonomy_desc', 'last_name', 'last_updated', 'sole_proprietor',
+            'enumeration_type', 'primary_taxonomy_license', 'tin_type', 'tin_value',
+            'state_geo', 'latitude', 'longitude', 'county_name', 'county_fips',
+            'stat_area_name', 'stat_area_code', 'matched_address'
+        ]
+        
+        # Get analysis parameters
+        max_rows = int(request.GET.get('max_rows', 10000))  # Smaller limit for map view
+        max_partitions = int(request.GET.get('max_partitions', 50))  # Smaller limit for map
+        
+        # Limit partitions for map view
+        if len(s3_paths) > max_partitions:
+            s3_paths = s3_paths[:max_partitions]
+        
+        # Combine partitions for analysis
+        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows, columns=required_columns)
+        
+        if combined_df is None or combined_df.empty:
+            return render(request, 'core/error.html', {
+                'error_message': 'Failed to load data from S3 partitions for map view.'
+            })
+        
+        # Get sample data for map (all data with coordinates)
+        # Clean the data to handle None/NaN values properly for JSON serialization
+        if not combined_df.empty:
+            map_df = combined_df.head(5000).copy()
+            # Replace NaN/None values with empty strings or null
+            map_df = map_df.fillna('')
+            map_df = map_df.replace({'None': '', None: ''})
+            map_data = map_df.to_dict('records')
+            
+            # Debug logging
+            logger.info(f"Map data prepared: {len(map_data)} records")
+            if map_data:
+                logger.info(f"Sample record keys: {list(map_data[0].keys())}")
+                logger.info(f"Sample record: {map_data[0]}")
+                
+                # Check for coordinate columns
+                coord_data = [item for item in map_data if item.get('latitude') and item.get('longitude')]
+                logger.info(f"Records with coordinates: {len(coord_data)} out of {len(map_data)}")
+                
+                if coord_data:
+                    logger.info(f"Sample coordinates: lat={coord_data[0].get('latitude')}, lng={coord_data[0].get('longitude')}")
+                else:
+                    logger.warning("No records found with valid latitude/longitude coordinates")
+        else:
+            map_data = []
+            logger.warning("No data available for map view")
+        
+        # Prepare context
+        context = {
+            'filters': filters,
+            'partitions_df': partitions_df,
+            'combined_df_info': {
+                'shape': combined_df.shape,
+                'columns': list(combined_df.columns),
+                'memory_usage_mb': round(combined_df.memory_usage(deep=True).sum() / 1024 / 1024, 2)
+            },
+            'sample_data': map_data,
+            'has_data': combined_df is not None and not combined_df.empty,
+            'total_partitions': len(partitions_df),
+            's3_paths_count': len(s3_paths)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in dataset_review_map view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        context = {
+            'filters': {},
+            'partitions_df': pd.DataFrame(),
+            'combined_df_info': {},
+            'sample_data': [],
+            'has_data': False,
+            'error_message': 'An error occurred while loading the map view.',
+            'total_partitions': 0,
+            's3_paths_count': 0
+        }
+    
+    return render(request, 'core/dataset_review_map.html', context)
+
+
+@login_required
+def dataset_review_loading(request):
+    """
+    Loading page for dataset review
+    """
+    return render(request, 'core/dataset_review_loading.html')
+
+
+@login_required
+def dataset_review(request):
+    """
+    Dataset Review Page - Combines S3 partitions into unified dataframe for analysis
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        # Initialize partition navigator
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db'
+        )
+        
+        # Get filters from request
+        filters = {
+            'payer_slug': request.GET.get('payer_slug'),
+            'state': request.GET.get('state'),
+            'billing_class': request.GET.get('billing_class'),
+            'procedure_set': request.GET.get('procedure_set'),
+            'taxonomy_code': request.GET.get('taxonomy_code'),
+            'taxonomy_desc': request.GET.get('taxonomy_desc'),
+            'stat_area_name': request.GET.get('stat_area_name'),
+            'year': request.GET.get('year'),
+            'month': request.GET.get('month')
+        }
+        
+        # Remove empty filters
+        filters = {k: v for k, v in filters.items() if v}
+        
+        # Validate required filters
+        if not all(filters.get(f) for f in navigator.required_filters):
+            return render(request, 'core/error.html', {
+                'error_message': 'Please select all required filters: Payer, State, and Billing Class'
+            })
+        
+        # Search for partitions
+        partitions_df = navigator.search_partitions(filters)
+        
+        if partitions_df.empty:
+            # Render the same dataset review page with a warning message, avoiding redirects
+            from django.contrib import messages
+            messages.warning(request, 'No data available with the selected filters. Please try different filter combinations.')
+            context = {
+                'filters': filters,
+                'partitions_df': pd.DataFrame(),
+                'combined_df_info': {},
+                'analysis': {},
+                'sample_data': [],
+                'max_rows': int(request.GET.get('max_rows', 50000)),
+                'analysis_type': request.GET.get('analysis_type', 'comprehensive'),
+                'has_data': False,
+                'total_partitions': 0,
+                's3_paths_count': 0,
+                # Provide empty option lists so the modal still works
+                'available_taxonomy_descs': '[]',
+                'available_proc_classes': '[]',
+                'available_proc_groups': '[]',
+                'available_codes': '[]',
+                'available_county_names': '[]',
+                'available_stat_area_names': '[]'
+            }
+            return render(request, 'core/dataset_review.html', context)
+        
+        # Get S3 paths for combination
+        s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
+        
+        # Get analysis parameters
+        max_rows = int(request.GET.get('max_rows', 50000))  # Default to 50k rows
+        max_partitions = int(request.GET.get('max_partitions', 100))  # Default to 100 partitions max
+        analysis_type = request.GET.get('analysis_type', 'comprehensive')
+        
+        # Limit partitions to prevent timeouts
+        if len(s3_paths) > max_partitions:
+            logger.warning(f"Limiting partitions from {len(s3_paths)} to {max_partitions} to prevent timeout")
+            s3_paths = s3_paths[:max_partitions]
+        
+        # Define the columns we actually need (from fact_cols_pull.txt)
+        required_columns = [
+            'state', 'year_month', 'payer_slug', 'billing_class', 'code_type', 'code',
+            'negotiated_type', 'negotiation_arrangement', 'negotiated_rate',
+            'reporting_entity_name', 'code_description', 'code_name', 'proc_set', 'proc_class',
+            'proc_group', 'version', 'npi', 'organization_name', 'primary_taxonomy_code',
+            'credential', 'enumeration_date', 'primary_taxonomy_state', 'first_name',
+            'primary_taxonomy_desc', 'last_name', 'last_updated', 'sole_proprietor',
+            'enumeration_type', 'primary_taxonomy_license', 'tin_type', 'tin_value',
+            'state_geo', 'latitude', 'longitude', 'county_name', 'county_fips',
+            'stat_area_name', 'stat_area_code', 'matched_address'
+        ]
+        
+        # Combine partitions for analysis (only load required columns)
+        logger.info(f"Starting to combine {len(s3_paths)} partitions (max_rows: {max_rows}) with {len(required_columns)} columns")
+        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows, columns=required_columns)
+        logger.info(f"Combination completed. DataFrame shape: {combined_df.shape if combined_df is not None else 'None'}")
+        
+        if combined_df is None or combined_df.empty:
+            return render(request, 'core/error.html', {
+                'error_message': 'Failed to load data from S3 partitions. Please check your AWS credentials and network connection.'
+            })
+        
+        # Perform simple analysis first
+        logger.info("Starting simple analysis...")
+        analysis = {
+            'dataset_summary': {
+                'total_rows': len(combined_df),
+                'total_columns': len(combined_df.columns),
+                'memory_usage_mb': round(combined_df.memory_usage(deep=True).sum() / 1024 / 1024, 2)
+            },
+            'basic_stats': {}
+        }
+        
+        # DataFrame already contains only the required columns from the optimized loading
+        
+        # Get basic stats for key columns
+        key_columns = ['state', 'payer_slug', 'billing_class', 'negotiated_rate', 'organization_name', 'primary_taxonomy_desc']
+        for col in key_columns:
+            if col in combined_df.columns:
+                try:
+                    if combined_df[col].dtype == 'object':
+                        # For text columns, show unique values
+                        unique_vals = combined_df[col].dropna().unique()[:10]  # First 10 unique values
+                        analysis['basic_stats'][col] = {
+                            'type': 'categorical',
+                            'unique_count': len(combined_df[col].dropna().unique()),
+                            'sample_values': list(unique_vals)
+                        }
+                    else:
+                        # For numeric columns, show basic stats
+                        analysis['basic_stats'][col] = {
+                            'type': 'numeric',
+                            'count': combined_df[col].count(),
+                            'mean': round(combined_df[col].mean(), 2) if combined_df[col].dtype in ['int64', 'float64'] else None,
+                            'min': combined_df[col].min() if combined_df[col].dtype in ['int64', 'float64'] else None,
+                            'max': combined_df[col].max() if combined_df[col].dtype in ['int64', 'float64'] else None
+                        }
+                except Exception as e:
+                    logger.warning(f"Could not analyze column {col}: {e}")
+                    analysis['basic_stats'][col] = {'error': str(e)}
+        
+        logger.info("Simple analysis completed")
+        
+        # Add key metrics analysis
+        analysis['key_metrics'] = {}
+        key_metric_columns = [
+            'stat_area_name', 'tin_value', 'county_name', 
+            'primary_taxonomy_desc', 'enumeration_type', 'organization_name'
+        ]
+        
+        for col in key_metric_columns:
+            if col in combined_df.columns:
+                try:
+                    # Get unique values and their counts
+                    value_counts = combined_df[col].value_counts().head(20)  # Top 20 values
+                    
+                    # Calculate average negotiated rate for each value
+                    metrics_data = []
+                    for value in value_counts.index:
+                        if pd.notna(value):
+                            subset = combined_df[combined_df[col] == value]
+                            if 'negotiated_rate' in subset.columns:
+                                avg_rate = subset['negotiated_rate'].mean()
+                                record_count = len(subset)
+                                metrics_data.append({
+                                    'value': str(value),
+                                    'record_count': record_count,
+                                    'avg_negotiated_rate': round(avg_rate, 2) if pd.notna(avg_rate) else None
+                                })
+                    
+                    analysis['key_metrics'][col] = {
+                        'total_unique_values': len(combined_df[col].dropna().unique()),
+                        'top_values': metrics_data[:10]  # Top 10 for display
+                    }
+                except Exception as e:
+                    logger.warning(f"Could not analyze key metric {col}: {e}")
+                    analysis['key_metrics'][col] = {'error': str(e)}
+        
+        # Add payer comparison analysis if multiple payers are selected
+        analysis['payer_comparison'] = {}
+        if 'payer_slug' in combined_df.columns:
+            try:
+                # Get unique payers in the dataset
+                unique_payers = combined_df['payer_slug'].dropna().unique()
+                
+                if len(unique_payers) > 1:
+                    payer_comparison_data = []
+                    
+                    for payer in unique_payers:
+                        payer_data = combined_df[combined_df['payer_slug'] == payer]
+                        
+                        # Calculate metrics for this payer
+                        payer_metrics = {
+                            'payer_slug': str(payer),
+                            'record_count': len(payer_data),
+                            'avg_negotiated_rate': round(payer_data['negotiated_rate'].mean(), 2) if 'negotiated_rate' in payer_data.columns else None,
+                            'median_negotiated_rate': round(payer_data['negotiated_rate'].median(), 2) if 'negotiated_rate' in payer_data.columns else None,
+                            'min_negotiated_rate': round(payer_data['negotiated_rate'].min(), 2) if 'negotiated_rate' in payer_data.columns else None,
+                            'max_negotiated_rate': round(payer_data['negotiated_rate'].max(), 2) if 'negotiated_rate' in payer_data.columns else None,
+                        }
+                        
+                        # Add top taxonomy descriptions for this payer
+                        if 'primary_taxonomy_desc' in payer_data.columns:
+                            top_taxonomies = payer_data['primary_taxonomy_desc'].value_counts().head(5)
+                            payer_metrics['top_taxonomies'] = [
+                                {'desc': str(desc), 'count': count} 
+                                for desc, count in top_taxonomies.items()
+                            ]
+                        
+                        # Add top organizations for this payer
+                        if 'organization_name' in payer_data.columns:
+                            top_orgs = payer_data['organization_name'].value_counts().head(5)
+                            payer_metrics['top_organizations'] = [
+                                {'name': str(name), 'count': count} 
+                                for name, count in top_orgs.items()
+                            ]
+                        
+                        payer_comparison_data.append(payer_metrics)
+                    
+                    # Sort by record count (descending)
+                    payer_comparison_data.sort(key=lambda x: x['record_count'], reverse=True)
+                    
+                    analysis['payer_comparison'] = {
+                        'total_payers': len(unique_payers),
+                        'payers': payer_comparison_data
+                    }
+                    
+            except Exception as e:
+                logger.warning(f"Could not analyze payer comparison: {e}")
+                analysis['payer_comparison'] = {'error': str(e)}
+        
+        # Get sample data for preview
+        sample_data = combined_df.head(100).to_dict('records') if not combined_df.empty else []
+        
+        # Handle export requests
+        export_format = request.GET.get('format')
+        if export_format and combined_df is not None:
+            try:
+                export_data = navigator.export_data(combined_df, export_format)
+                response = HttpResponse(export_data, content_type=f'application/{export_format}')
+                response['Content-Disposition'] = f'attachment; filename="dataset_review.{export_format}"'
+                return response
+            except Exception as e:
+                logger.error(f"Export error: {e}")
+                return render(request, 'core/error.html', {
+                    'error_message': f'Export failed: {str(e)}'
+                })
+        
+        # Calculate total time
+        total_time = time.time() - start_time
+        logger.info(f"Total dataset review time: {total_time:.2f} seconds")
+        
+        # Get available filter options for additional filters modal
+        available_filters = {}
+        if combined_df is not None and not combined_df.empty:
+            try:
+                import json
+                available_filters = {
+                    'available_taxonomy_descs': json.dumps(sorted(combined_df['primary_taxonomy_desc'].dropna().unique().tolist())[:100]),
+                    'available_proc_classes': json.dumps(sorted(combined_df['proc_class'].dropna().unique().tolist())[:100]),
+                    'available_proc_groups': json.dumps(sorted(combined_df['proc_group'].dropna().unique().tolist())[:100]),
+                    'available_codes': json.dumps(sorted(combined_df['code'].dropna().unique().tolist())[:100]),
+                    'available_county_names': json.dumps(sorted(combined_df['county_name'].dropna().unique().tolist())[:100]),
+                    'available_stat_area_names': json.dumps(sorted(combined_df['stat_area_name'].dropna().unique().tolist())[:100]),
+                    'available_payer_slugs': json.dumps(sorted(combined_df['payer_slug'].dropna().unique().tolist())[:100])
+                }
+            except Exception as e:
+                logger.warning(f"Could not get available filter options: {e}")
+                available_filters = {
+                    'available_taxonomy_descs': '[]',
+                    'available_proc_classes': '[]',
+                    'available_proc_groups': '[]',
+                    'available_codes': '[]',
+                    'available_county_names': '[]',
+                    'available_stat_area_names': '[]',
+                    'available_payer_slugs': '[]'
+                }
+
+        # Prepare context
+        context = {
+            'filters': filters,
+            'partitions_df': partitions_df,
+            'combined_df_info': {
+                'shape': combined_df.shape,
+                'columns': list(combined_df.columns),
+                'memory_usage_mb': round(combined_df.memory_usage(deep=True).sum() / 1024 / 1024, 2),
+                'load_summary': getattr(combined_df, 'attrs', {}).get('_load_summary', {}),
+                'total_time_seconds': round(total_time, 2)
+            },
+            'analysis': analysis,
+            'sample_data': sample_data,
+            'max_rows': max_rows,
+            'analysis_type': analysis_type,
+            'has_data': combined_df is not None and not combined_df.empty,
+            'total_partitions': len(partitions_df),
+            's3_paths_count': len(s3_paths),
+            **available_filters
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in dataset_review view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        context = {
+            'filters': {},
+            'partitions_df': pd.DataFrame(),
+            'combined_df_info': {},
+            'analysis': {},
+            'sample_data': [],
+            'max_rows': 50000,
+            'analysis_type': 'comprehensive',
+            'has_data': False,
+            'error_message': 'An error occurred while analyzing the dataset.',
+            'total_partitions': 0,
+            's3_paths_count': 0
+        }
+    
+    return render(request, 'core/dataset_review.html', context)
 
 
 @login_required

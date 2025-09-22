@@ -1,0 +1,1260 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Dataset Review - Commercial Rate Insights{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Display messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                <i class="fas fa-{% if message.tags == 'warning' %}exclamation-triangle{% elif message.tags == 'error' %}times-circle{% elif message.tags == 'success' %}check-circle{% else %}info-circle{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    {% if error_message %}
+        <div class="alert alert-danger">
+            <h4>Error</h4>
+            <p>{{ error_message }}</p>
+            <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary">Back to Partition Selection</a>
+        </div>
+    {% else %}
+        <!-- Header Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="h3 mb-1">Dataset Review</h1>
+                        <p class="text-muted mb-0">Combined analysis of {{ total_partitions }} partition{{ total_partitions|pluralize }} from S3</p>
+                    </div>
+                    <div>
+                        <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Selection
+                        </a>
+                        {% if has_data %}
+                            <a href="{% url 'dataset_review_map' %}?{{ request.GET.urlencode }}" class="btn btn-info">
+                                <i class="fas fa-map-marked-alt"></i> View Map
+                            </a>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                    <i class="fas fa-download"></i> Export Data
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="?{{ request.GET.urlencode }}&format=csv">Export as CSV</a></li>
+                                    <li><a class="dropdown-item" href="?{{ request.GET.urlencode }}&format=parquet">Export as Parquet</a></li>
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Applied Filters</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addFiltersModal">
+                            <i class="fas fa-plus"></i> Add More Filters
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for key, value in filters.items %}
+                                {% if value %}
+                                    <div class="col-md-3 mb-2">
+                                        <strong>{{ key|replace:"_| "|title }}:</strong>
+                                        <span class="badge bg-primary">{{ value }}</span>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Filters Modal -->
+        <div class="modal fade" id="addFiltersModal" tabindex="-1" aria-labelledby="addFiltersModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title" id="addFiltersModalLabel">
+                            <i class="fas fa-filter text-primary me-2"></i>
+                            Manage Filters
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <form method="get" id="additionalFiltersForm">
+                            <!-- Preserve existing filters (explicit handling to avoid splitting strings into chars) -->
+                            {% if filters.payer_slug %}
+                                <input type="hidden" name="payer_slug" value="{{ filters.payer_slug }}">
+                            {% endif %}
+                            {% if filters.state %}
+                                <input type="hidden" name="state" value="{{ filters.state }}">
+                            {% endif %}
+                            {% if filters.billing_class %}
+                                <input type="hidden" name="billing_class" value="{{ filters.billing_class }}">
+                            {% endif %}
+                            {% if filters.procedure_set %}
+                                <input type="hidden" name="procedure_set" value="{{ filters.procedure_set }}">
+                            {% endif %}
+                            {% if filters.year %}
+                                <input type="hidden" name="year" value="{{ filters.year }}">
+                            {% endif %}
+                            {% if filters.month %}
+                                <input type="hidden" name="month" value="{{ filters.month }}">
+                            {% endif %}
+
+                            {# Multi-valued additional filters #}
+                            {% if filters.taxonomy_desc %}
+                                {% if filters.taxonomy_desc.0 %}
+                                    {% for item in filters.taxonomy_desc %}
+                                        <input type="hidden" name="taxonomy_desc" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="taxonomy_desc" value="{{ filters.taxonomy_desc }}">
+                                {% endif %}
+                            {% endif %}
+                            {% if filters.proc_class %}
+                                {% if filters.proc_class.0 %}
+                                    {% for item in filters.proc_class %}
+                                        <input type="hidden" name="proc_class" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="proc_class" value="{{ filters.proc_class }}">
+                                {% endif %}
+                            {% endif %}
+                            {% if filters.proc_group %}
+                                {% if filters.proc_group.0 %}
+                                    {% for item in filters.proc_group %}
+                                        <input type="hidden" name="proc_group" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="proc_group" value="{{ filters.proc_group }}">
+                                {% endif %}
+                            {% endif %}
+                            {% if filters.code %}
+                                {% if filters.code.0 %}
+                                    {% for item in filters.code %}
+                                        <input type="hidden" name="code" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="code" value="{{ filters.code }}">
+                                {% endif %}
+                            {% endif %}
+                            {% if filters.county_name %}
+                                {% if filters.county_name.0 %}
+                                    {% for item in filters.county_name %}
+                                        <input type="hidden" name="county_name" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="county_name" value="{{ filters.county_name }}">
+                                {% endif %}
+                            {% endif %}
+                            {% if filters.stat_area_name %}
+                                {% if filters.stat_area_name.0 %}
+                                    {% for item in filters.stat_area_name %}
+                                        <input type="hidden" name="stat_area_name" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="stat_area_name" value="{{ filters.stat_area_name }}">
+                                {% endif %}
+                            {% endif %}
+                            
+                            <!-- Filter Instructions -->
+                            <div class="alert alert-info mb-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <div>
+                                        <strong>Filter Instructions:</strong> Type to search and select multiple options. Use the clear buttons to remove specific filters.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Filter Grid -->
+                            <div class="row g-4">
+                                <!-- Taxonomy Description -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="taxonomy_desc" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-user-md text-primary me-1"></i>
+                                                Taxonomy Description
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('taxonomy_desc')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="taxonomy_desc" name="taxonomy_desc" 
+                                               placeholder="Type to search taxonomy descriptions..." 
+                                               value="{% if filters.taxonomy_desc %}{% if filters.taxonomy_desc|length > 1 %}{{ filters.taxonomy_desc|join:', ' }}{% else %}{{ filters.taxonomy_desc.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_taxonomy_descs|safe }}'>
+                                        <small class="text-muted">Select one or more taxonomy descriptions</small>
+                                    </div>
+                                </div>
+
+                                <!-- Procedure Class -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="proc_class" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-tags text-warning me-1"></i>
+                                                Procedure Class
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('proc_class')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="proc_class" name="proc_class" 
+                                               placeholder="Type to search procedure classes..." 
+                                               value="{% if filters.proc_class %}{% if filters.proc_class|length > 1 %}{{ filters.proc_class|join:', ' }}{% else %}{{ filters.proc_class.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_proc_classes|safe }}'>
+                                        <small class="text-muted">Select one or more procedure classes</small>
+                                    </div>
+                                </div>
+
+                                <!-- Procedure Group -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="proc_group" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-object-group text-info me-1"></i>
+                                                Procedure Group
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('proc_group')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="proc_group" name="proc_group" 
+                                               placeholder="Type to search procedure groups..." 
+                                               value="{% if filters.proc_group %}{% if filters.proc_group|length > 1 %}{{ filters.proc_group|join:', ' }}{% else %}{{ filters.proc_group.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_proc_groups|safe }}'>
+                                        <small class="text-muted">Select one or more procedure groups</small>
+                                    </div>
+                                </div>
+
+                                <!-- Code -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="code" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-barcode text-success me-1"></i>
+                                                Code
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('code')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="code" name="code" 
+                                               placeholder="Type to search codes..." 
+                                               value="{% if filters.code %}{% if filters.code|length > 1 %}{{ filters.code|join:', ' }}{% else %}{{ filters.code.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_codes|safe }}'>
+                                        <small class="text-muted">Select one or more codes</small>
+                                    </div>
+                                </div>
+
+                                <!-- County Name -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="county_name" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                                                County Name
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('county_name')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="county_name" name="county_name" 
+                                               placeholder="Type to search county names..." 
+                                               value="{% if filters.county_name %}{% if filters.county_name|length > 1 %}{{ filters.county_name|join:', ' }}{% else %}{{ filters.county_name.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_county_names|safe }}'>
+                                        <small class="text-muted">Select one or more counties</small>
+                                    </div>
+                                </div>
+
+                                <!-- Statistical Area Name -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="stat_area_name" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-chart-area text-secondary me-1"></i>
+                                                Statistical Area Name
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('stat_area_name')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="stat_area_name" name="stat_area_name" 
+                                               placeholder="Type to search statistical area names..." 
+                                               value="{% if filters.stat_area_name %}{% if filters.stat_area_name|length > 1 %}{{ filters.stat_area_name|join:', ' }}{% else %}{{ filters.stat_area_name.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_stat_area_names|safe }}'>
+                                        <small class="text-muted">Select one or more statistical areas</small>
+                                    </div>
+                                </div>
+
+                                <!-- Payer Slug -->
+                                <div class="col-lg-6">
+                                    <div class="filter-group">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="payer_slug" class="form-label fw-bold mb-0">
+                                                <i class="fas fa-building text-primary me-1"></i>
+                                                Payer Slug
+                                            </label>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilter('payer_slug')">
+                                                <i class="fas fa-times"></i> Clear
+                                            </button>
+                                        </div>
+                                        <input type="text" class="form-control autocomplete-input" id="payer_slug" name="payer_slug" 
+                                               placeholder="Type to search payer slugs..." 
+                                               value="{% if filters.payer_slug %}{% if filters.payer_slug|length > 1 %}{{ filters.payer_slug|join:', ' }}{% else %}{{ filters.payer_slug.0 }}{% endif %}{% endif %}"
+                                               data-options='{{ available_payer_slugs|safe }}'>
+                                        <small class="text-muted">Select one or more payers for comparison</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearAllFilters()">
+                            <i class="fas fa-eraser"></i> Clear All
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="submitFilters()">
+                            <i class="fas fa-check"></i> Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if has_data %}
+            <!-- Dataset Summary -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-primary">{{ combined_df_info.shape.0|intcomma }}</h3>
+                            <p class="card-text">Total Records</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-success">{{ combined_df_info.shape.1 }}</h3>
+                            <p class="card-text">Columns</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-info">{{ combined_df_info.memory_usage_mb|floatformat:1 }} MB</h3>
+                            <p class="card-text">Memory Usage</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-warning">{{ total_partitions }}</h3>
+                            <p class="card-text">Partitions Loaded</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Metrics Analysis -->
+            {% if analysis.key_metrics %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Key Metrics Analysis</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    {% for metric_name, metric_data in analysis.key_metrics.items %}
+                                        {% if not metric_data.error %}
+                                            <div class="col-lg-6 mb-4">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h6 class="mb-0">{{ metric_name|replace:"_| "|title }}</h6>
+                                                        <small class="text-muted">{{ metric_data.total_unique_values }} unique values</small>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="table-responsive">
+                                                            <table class="table table-sm table-striped">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Value</th>
+                                                                        <th>Records</th>
+                                                                        <th>Avg Rate</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {% for item in metric_data.top_values %}
+                                                                        <tr>
+                                                                            <td>
+                                                                                <span class="text-truncate d-inline-block" style="max-width: 200px;" title="{{ item.value }}">
+                                                                                    {{ item.value|truncatechars:30 }}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td>
+                                                                                <span class="badge bg-info">{{ item.record_count|intcomma }}</span>
+                                                                            </td>
+                                                                            <td>
+                                                                                {% if item.avg_negotiated_rate %}
+                                                                                    <span class="text-success fw-bold">${{ item.avg_negotiated_rate|floatformat:2 }}</span>
+                                                                                {% else %}
+                                                                                    <span class="text-muted">-</span>
+                                                                                {% endif %}
+                                                                            </td>
+                                                                        </tr>
+                                                                    {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Payer Comparison Analysis -->
+            {% if analysis.payer_comparison and analysis.payer_comparison.payers %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar text-primary me-2"></i>
+                                    Payer Comparison Analysis
+                                </h5>
+                                <small class="text-muted">Comparing {{ analysis.payer_comparison.total_payers }} payers</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    {% for payer in analysis.payer_comparison.payers %}
+                                        <div class="col-lg-6 mb-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-light">
+                                                    <h6 class="mb-0">{{ payer.payer_slug|replace:"-| "|title }}</h6>
+                                                    <small class="text-muted">{{ payer.record_count|intcomma }} records</small>
+                                                </div>
+                                                <div class="card-body">
+                                                    <!-- Rate Statistics -->
+                                                    <div class="row mb-3">
+                                                        <div class="col-6">
+                                                            <div class="text-center">
+                                                                <h6 class="text-primary mb-1">Avg Rate</h6>
+                                                                <span class="fw-bold">${{ payer.avg_negotiated_rate|floatformat:2 }}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <div class="text-center">
+                                                                <h6 class="text-success mb-1">Median Rate</h6>
+                                                                <span class="fw-bold">${{ payer.median_negotiated_rate|floatformat:2 }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="row mb-3">
+                                                        <div class="col-6">
+                                                            <div class="text-center">
+                                                                <h6 class="text-info mb-1">Min Rate</h6>
+                                                                <span class="fw-bold">${{ payer.min_negotiated_rate|floatformat:2 }}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <div class="text-center">
+                                                                <h6 class="text-warning mb-1">Max Rate</h6>
+                                                                <span class="fw-bold">${{ payer.max_negotiated_rate|floatformat:2 }}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Top Taxonomies -->
+                                                    {% if payer.top_taxonomies %}
+                                                        <h6 class="mb-2">Top Taxonomies</h6>
+                                                        <div class="mb-2">
+                                                            {% for taxonomy in payer.top_taxonomies %}
+                                                                <span class="badge bg-secondary me-1 mb-1">
+                                                                    {{ taxonomy.desc|truncatechars:30 }} ({{ taxonomy.count }})
+                                                                </span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% endif %}
+
+                                                    <!-- Top Organizations -->
+                                                    {% if payer.top_organizations %}
+                                                        <h6 class="mb-2">Top Organizations</h6>
+                                                        <div class="mb-2">
+                                                            {% for org in payer.top_organizations %}
+                                                                <span class="badge bg-info me-1 mb-1">
+                                                                    {{ org.name|truncatechars:25 }} ({{ org.count }})
+                                                                </span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Basic Column Statistics -->
+            {% if analysis.basic_stats %}
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Key Column Statistics</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Column</th>
+                                                <th>Type</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for col, stats in analysis.basic_stats.items %}
+                                            <tr>
+                                                <td><strong>{{ col }}</strong></td>
+                                                <td>
+                                                    <span class="badge bg-{% if stats.type == 'categorical' %}primary{% else %}success{% endif %}">
+                                                        {{ stats.type }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {% if stats.type == 'categorical' %}
+                                                        <strong>{{ stats.unique_count }}</strong> unique values<br>
+                                                        <small class="text-muted">Sample: {{ stats.sample_values|join:", " }}</small>
+                                                    {% elif stats.type == 'numeric' %}
+                                                        Count: {{ stats.count }}, 
+                                                        Mean: {{ stats.mean }}, 
+                                                        Range: {{ stats.min }} - {{ stats.max }}
+                                                    {% else %}
+                                                        <span class="text-warning">{{ stats.error }}</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Analysis Tabs -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <ul class="nav nav-tabs card-header-tabs" id="analysisTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">
+                                        Dataset Summary
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="quality-tab" data-bs-toggle="tab" data-bs-target="#quality" type="button" role="tab">
+                                        Data Quality
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" data-bs-target="#statistics" type="button" role="tab">
+                                        Statistics
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="insights-tab" data-bs-toggle="tab" data-bs-target="#insights" type="button" role="tab">
+                                        Business Insights
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="preview-tab" data-bs-toggle="tab" data-bs-target="#preview" type="button" role="tab">
+                                        Data Preview
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body">
+                            <div class="tab-content" id="analysisTabContent">
+                                <!-- Dataset Summary Tab -->
+                                <div class="tab-pane fade show active" id="summary" role="tabpanel">
+                                    <h5>Dataset Overview</h5>
+                                    {% if analysis.dataset_summary %}
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6>Basic Information</h6>
+                                                <ul class="list-unstyled">
+                                                    <li><strong>Total Rows:</strong> {{ analysis.dataset_summary.total_rows|intcomma }}</li>
+                                                    <li><strong>Total Columns:</strong> {{ analysis.dataset_summary.total_columns }}</li>
+                                                    <li><strong>Memory Usage:</strong> {{ analysis.dataset_summary.memory_usage_mb|floatformat:2 }} MB</li>
+                                                </ul>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6>Column Types</h6>
+                                                <ul class="list-unstyled">
+                                                    <li><strong>Numeric Columns:</strong> {{ analysis.column_analysis.numeric_columns|length }}</li>
+                                                    <li><strong>Categorical Columns:</strong> {{ analysis.column_analysis.categorical_columns|length }}</li>
+                                                    <li><strong>Text Columns:</strong> {{ analysis.column_analysis.text_columns|length }}</li>
+                                                    <li><strong>High Cardinality:</strong> {{ analysis.column_analysis.high_cardinality_columns|length }}</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+
+                                    {% if analysis.recommendations %}
+                                        <h6 class="mt-4">Recommendations</h6>
+                                        <div class="alert alert-info">
+                                            <ul class="mb-0">
+                                                {% for recommendation in analysis.recommendations %}
+                                                    <li>{{ recommendation }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Data Quality Tab -->
+                                <div class="tab-pane fade" id="quality" role="tabpanel">
+                                    <h5>Data Quality Analysis</h5>
+                                    {% if analysis.data_quality %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-striped">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Column</th>
+                                                        <th>Data Type</th>
+                                                        <th>Total Values</th>
+                                                        <th>Null Count</th>
+                                                        <th>Null %</th>
+                                                        <th>Unique Count</th>
+                                                        <th>Unique %</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for col, metrics in analysis.data_quality.items %}
+                                                        <tr>
+                                                            <td><strong>{{ col }}</strong></td>
+                                                            <td><span class="badge bg-secondary">{{ metrics.data_type }}</span></td>
+                                                            <td>{{ metrics.total_values|intcomma }}</td>
+                                                            <td>
+                                                                {% if metrics.null_count > 0 %}
+                                                                    <span class="text-warning">{{ metrics.null_count|intcomma }}</span>
+                                                                {% else %}
+                                                                    <span class="text-success">0</span>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>
+                                                                {% if metrics.null_percentage > 10 %}
+                                                                    <span class="text-danger">{{ metrics.null_percentage }}%</span>
+                                                                {% elif metrics.null_percentage > 5 %}
+                                                                    <span class="text-warning">{{ metrics.null_percentage }}%</span>
+                                                                {% else %}
+                                                                    <span class="text-success">{{ metrics.null_percentage }}%</span>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>{{ metrics.unique_count|intcomma }}</td>
+                                                            <td>{{ metrics.unique_percentage }}%</td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Statistics Tab -->
+                                <div class="tab-pane fade" id="statistics" role="tabpanel">
+                                    <h5>Statistical Summary</h5>
+                                    {% if analysis.statistical_summary %}
+                                        {% for col, stats in analysis.statistical_summary.items %}
+                                            {% if col != 'message' %}
+                                                <div class="card mb-3">
+                                                    <div class="card-header">
+                                                        <h6 class="mb-0">{{ col|title }}</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="row">
+                                                            <div class="col-md-2">
+                                                                <strong>Count:</strong><br>{{ stats.count|intcomma }}
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <strong>Mean:</strong><br>{{ stats.mean }}
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <strong>Median:</strong><br>{{ stats.median }}
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <strong>Std Dev:</strong><br>{{ stats.std }}
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <strong>Min:</strong><br>{{ stats.min }}
+                                                            </div>
+                                                            <div class="col-md-2">
+                                                                <strong>Max:</strong><br>{{ stats.max }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <p class="text-muted">No numeric columns found for statistical analysis.</p>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Business Insights Tab -->
+                                <div class="tab-pane fade" id="insights" role="tabpanel">
+                                    <h5>Business Insights</h5>
+                                    {% if analysis.business_insights %}
+                                        {% if analysis.business_insights.rate_analysis %}
+                                            <div class="card mb-3">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0">Rate Analysis</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        <div class="col-md-3">
+                                                            <strong>Total Rate Records:</strong><br>
+                                                            {{ analysis.business_insights.rate_analysis.total_rate_records|intcomma }}
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <strong>Average Rate:</strong><br>
+                                                            ${{ analysis.business_insights.rate_analysis.avg_rate|floatformat:2 }}
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <strong>Median Rate:</strong><br>
+                                                            ${{ analysis.business_insights.rate_analysis.median_rate|floatformat:2 }}
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <strong>High Value Threshold:</strong><br>
+                                                            ${{ analysis.business_insights.rate_analysis.high_value_threshold|floatformat:2 }}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+
+                                        {% if analysis.business_insights.top_payers %}
+                                            <div class="card mb-3">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0">Top Payers</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        {% for payer, count in analysis.business_insights.top_payers.items %}
+                                                            <div class="col-md-4 mb-2">
+                                                                <strong>{{ payer }}:</strong> {{ count|intcomma }} records
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+
+                                        {% if analysis.business_insights.top_organizations %}
+                                            <div class="card mb-3">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0">Top Organizations</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        {% for org, count in analysis.business_insights.top_organizations.items %}
+                                                            <div class="col-md-4 mb-2">
+                                                                <strong>{{ org }}:</strong> {{ count|intcomma }} records
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+
+                                <!-- Data Preview Tab -->
+                                <div class="tab-pane fade" id="preview" role="tabpanel">
+                                    <h5>Data Preview (First 100 Records)</h5>
+                                    {% if sample_data %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-striped table-hover">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        {% for col in combined_df_info.columns %}
+                                                            <th>{{ col|replace:"_| "|title }}</th>
+                                                        {% endfor %}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for record in sample_data %}
+                                                        <tr>
+                                                            {% for key, value in record.items %}
+                                                                <td>
+                                                                    {% if value is None %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% elif key == 'rate' and value %}
+                                                                        ${{ value|floatformat:2 }}
+                                                                    {% else %}
+                                                                        {{ value|truncatechars:50 }}
+                                                                    {% endif %}
+                                                                </td>
+                                                            {% endfor %}
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">No data available for preview.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+
+<style>
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.nav-tabs .nav-link.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.table th {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.badge {
+    font-size: 0.75rem;
+}
+
+.text-primary { color: #007bff !important; }
+.text-success { color: #28a745 !important; }
+.text-info { color: #17a2b8 !important; }
+.text-warning { color: #ffc107 !important; }
+.text-danger { color: #dc3545 !important; }
+
+/* Select2 styling for modal */
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-container--default .select2-selection--multiple {
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    min-height: 38px;
+    padding: 0.375rem 0.75rem;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background-color: #007bff;
+    border: 1px solid #007bff;
+    color: white;
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    margin: 2px;
+    font-size: 0.875rem;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: white;
+    margin-right: 5px;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #ffc107;
+}
+
+/* Filter group styling */
+.filter-group {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    height: 100%;
+    transition: all 0.2s ease;
+}
+
+.filter-group:hover {
+    border-color: #007bff;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+}
+
+.filter-group .form-label {
+    color: #495057;
+    font-size: 0.95rem;
+}
+
+.filter-group small {
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    display: block;
+}
+
+/* Modal improvements */
+.modal-xl {
+    max-width: 1200px;
+}
+
+.modal-header.bg-light {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-footer.bg-light {
+    border-top: 1px solid #dee2e6;
+}
+
+/* Clear button styling */
+.btn-outline-danger {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.btn-outline-danger:hover {
+    transform: translateY(-1px);
+}
+
+/* Autocomplete styling */
+.autocomplete-container {
+    position: relative;
+    width: 100%;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 0.375rem 0.375rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.autocomplete-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f8f9fa;
+    transition: background-color 0.2s ease;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    background-color: #f8f9fa;
+}
+
+.autocomplete-item.selected {
+    background-color: #007bff;
+    color: white;
+}
+
+.autocomplete-item.no-results {
+    color: #6c757d;
+    font-style: italic;
+    cursor: default;
+}
+
+.autocomplete-item.no-results:hover {
+    background-color: transparent;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-input {
+    border-radius: 0.375rem 0.375rem 0 0;
+}
+
+.autocomplete-input:focus {
+    border-radius: 0.375rem 0.375rem 0 0;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize autocomplete for text inputs when modal is shown
+    document.getElementById('addFiltersModal').addEventListener('shown.bs.modal', function () {
+        initializeAutocomplete();
+    });
+    
+    // Initialize autocomplete function
+    function initializeAutocomplete() {
+        const autocompleteInputs = document.querySelectorAll('.autocomplete-input');
+        
+        autocompleteInputs.forEach(input => {
+            const options = JSON.parse(input.getAttribute('data-options') || '[]');
+            
+            // Create autocomplete container
+            const autocompleteContainer = document.createElement('div');
+            autocompleteContainer.className = 'autocomplete-container';
+            autocompleteContainer.style.position = 'relative';
+            
+            // Insert autocomplete container after input
+            input.parentNode.insertBefore(autocompleteContainer, input.nextSibling);
+            
+            // Create dropdown
+            const dropdown = document.createElement('div');
+            dropdown.className = 'autocomplete-dropdown';
+            dropdown.style.display = 'none';
+            autocompleteContainer.appendChild(dropdown);
+            
+            // Move input into container
+            autocompleteContainer.insertBefore(input, dropdown);
+            
+            // Filter function
+            function filterOptions(searchTerm) {
+                return options.filter(option => 
+                    option.toLowerCase().includes(searchTerm.toLowerCase())
+                ).slice(0, 10); // Limit to 10 results
+            }
+            
+            // Show dropdown
+            function showDropdown() {
+                const searchTerm = input.value.trim();
+                let filteredOptions;
+                
+                if (searchTerm.length > 0) {
+                    // Filter options based on search term
+                    filteredOptions = filterOptions(searchTerm);
+                } else {
+                    // Show all options when no search term
+                    filteredOptions = options.slice(0, 20); // Limit to 20 for performance
+                }
+                
+                if (filteredOptions.length > 0) {
+                    dropdown.innerHTML = filteredOptions.map(option => 
+                        `<div class="autocomplete-item" data-value="${option}">${option}</div>`
+                    ).join('');
+                    dropdown.style.display = 'block';
+                } else if (searchTerm.length > 0) {
+                    // Show "No results found" when searching but no matches
+                    dropdown.innerHTML = '<div class="autocomplete-item no-results">No results found</div>';
+                    dropdown.style.display = 'block';
+                } else {
+                    dropdown.style.display = 'none';
+                }
+            }
+            
+            // Hide dropdown
+            function hideDropdown() {
+                setTimeout(() => {
+                    dropdown.style.display = 'none';
+                }, 200);
+            }
+            
+            // Track selected item for keyboard navigation
+            let selectedIndex = -1;
+            
+            // Event listeners
+            input.addEventListener('input', function() {
+                selectedIndex = -1; // Reset selection when typing
+                showDropdown();
+            });
+            
+            input.addEventListener('focus', function() {
+                selectedIndex = -1; // Reset selection when focusing
+                showDropdown();
+            });
+            
+            input.addEventListener('blur', hideDropdown);
+            
+            // Keyboard navigation
+            input.addEventListener('keydown', function(e) {
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                    updateSelection();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, -1);
+                    updateSelection();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (selectedIndex >= 0 && items[selectedIndex]) {
+                        items[selectedIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.style.display = 'none';
+                    selectedIndex = -1;
+                }
+            });
+            
+            // Update visual selection
+            function updateSelection() {
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+                items.forEach((item, index) => {
+                    if (index === selectedIndex) {
+                        item.classList.add('selected');
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
+            
+            // Handle item selection
+            dropdown.addEventListener('click', function(e) {
+                if (e.target.classList.contains('autocomplete-item')) {
+                    const selectedValue = e.target.getAttribute('data-value');
+                    const currentValue = input.value.trim();
+                    
+                    // Check if we're adding to existing comma-separated values
+                    const hasComma = currentValue.includes(',');
+                    
+                    if (hasComma) {
+                        // Add to existing comma-separated values
+                        const values = currentValue.split(',').map(v => v.trim()).filter(v => v);
+                        if (!values.includes(selectedValue)) {
+                            values.push(selectedValue);
+                            input.value = values.join(', ');
+                        }
+                    } else {
+                        // Replace the current value with the selected one
+                        input.value = selectedValue;
+                    }
+                    
+                    dropdown.style.display = 'none';
+                    input.focus();
+                }
+            });
+        });
+    }
+});
+
+// Function to clear individual filters
+function clearFilter(filterName) {
+    const inputElement = document.getElementById(filterName);
+    if (inputElement) {
+        // Clear the input value
+        inputElement.value = '';
+        
+        // Show a brief confirmation
+        const clearButton = event.target.closest('button');
+        const originalText = clearButton.innerHTML;
+        clearButton.innerHTML = '<i class="fas fa-check"></i> Cleared!';
+        clearButton.classList.remove('btn-outline-danger');
+        clearButton.classList.add('btn-outline-success');
+        
+        setTimeout(() => {
+            clearButton.innerHTML = originalText;
+            clearButton.classList.remove('btn-outline-success');
+            clearButton.classList.add('btn-outline-danger');
+        }, 1500);
+    }
+}
+
+// Function to clear all filters
+function clearAllFilters() {
+    if (confirm('Are you sure you want to clear all additional filters?')) {
+        const filterNames = ['taxonomy_desc', 'proc_class', 'proc_group', 'code', 'county_name', 'stat_area_name', 'payer_slug'];
+        
+        filterNames.forEach(filterName => {
+            const inputElement = document.getElementById(filterName);
+            if (inputElement) {
+                inputElement.value = '';
+            }
+        });
+        
+        // Show confirmation
+        const clearAllButton = event.target;
+        const originalText = clearAllButton.innerHTML;
+        clearAllButton.innerHTML = '<i class="fas fa-check"></i> All Cleared!';
+        clearAllButton.classList.remove('btn-outline-secondary');
+        clearAllButton.classList.add('btn-outline-success');
+        
+        setTimeout(() => {
+            clearAllButton.innerHTML = originalText;
+            clearAllButton.classList.remove('btn-outline-success');
+            clearAllButton.classList.add('btn-outline-secondary');
+        }, 2000);
+    }
+}
+
+// Function to submit filters with proper multiple value handling
+function submitFilters() {
+    const form = document.getElementById('additionalFiltersForm');
+    const filterNames = ['taxonomy_desc', 'proc_class', 'proc_group', 'code', 'county_name', 'stat_area_name', 'payer_slug'];
+    
+    // Remove any existing hidden inputs for these filters
+    filterNames.forEach(filterName => {
+        const existingInputs = form.querySelectorAll(`input[name="${filterName}"]`);
+        existingInputs.forEach(input => {
+            if (input.type === 'hidden') {
+                input.remove();
+            }
+        });
+    });
+    
+    // Process each filter input
+    filterNames.forEach(filterName => {
+        const inputElement = document.getElementById(filterName);
+        if (inputElement && inputElement.value.trim()) {
+            const values = inputElement.value.split(',').map(v => v.trim()).filter(v => v);
+            
+            // Create hidden inputs for each value
+            values.forEach(value => {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = filterName;
+                hiddenInput.value = value;
+                form.appendChild(hiddenInput);
+            });
+        }
+    });
+    
+    // Submit the form
+    form.submit();
+}
+</script>
+{% endblock %}
