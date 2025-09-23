@@ -71,7 +71,13 @@
                                 {% if value %}
                                     <div class="col-md-3 mb-2">
                                         <strong>{{ key|replace:"_| "|title }}:</strong>
-                                        <span class="badge bg-primary">{{ value }}</span>
+                                        {% if key == 'payer_slug' and value|length > 1 %}
+                                            {% for slug in value %}
+                                                <span class="badge bg-primary me-1">{{ slug|title|replace:"-| " }}</span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="badge bg-primary">{{ value|title|replace:"-| " }}</span>
+                                        {% endif %}
                                     </div>
                                 {% endif %}
                             {% endfor %}
@@ -359,6 +365,137 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Payer Breakdown Analysis (if multiple payers selected) -->
+            {% if analysis.payer_breakdown %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-building text-primary me-2"></i>
+                                Payer Breakdown Analysis
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Payer</th>
+                                            <th class="text-end">Records</th>
+                                            <th class="text-end">Avg Rate</th>
+                                            <th class="text-end">Median Rate</th>
+                                            <th class="text-end">Organizations</th>
+                                            <th class="text-end">Taxonomies</th>
+                                            <th class="text-end">Stat Areas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for payer_slug, payer_data in analysis.payer_breakdown.items %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ payer_slug|title|replace:"-| " }}</strong>
+                                            </td>
+                                            <td class="text-end">
+                                                <span class="badge bg-primary">{{ payer_data.record_count|intcomma }}</span>
+                                            </td>
+                                            <td class="text-end">
+                                                {% if payer_data.avg_negotiated_rate %}
+                                                    <span class="text-success fw-bold">${{ payer_data.avg_negotiated_rate|floatformat:2 }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">
+                                                {% if payer_data.median_negotiated_rate %}
+                                                    <span class="text-info fw-bold">${{ payer_data.median_negotiated_rate|floatformat:2 }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end">{{ payer_data.unique_organizations|intcomma }}</td>
+                                            <td class="text-end">{{ payer_data.unique_taxonomies|intcomma }}</td>
+                                            <td class="text-end">{{ payer_data.unique_stat_areas|intcomma }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Medicare Comparison Table -->
+                            <div class="mt-4">
+                                <h6 class="text-muted mb-3">Medicare Benchmark Comparison</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Payer</th>
+                                                <th class="text-end">Medicare Professional</th>
+                                                <th class="text-end">% of Medicare Prof</th>
+                                                <th class="text-end">Medicare ASC</th>
+                                                <th class="text-end">% of Medicare ASC</th>
+                                                <th class="text-end">Medicare OPPS</th>
+                                                <th class="text-end">% of Medicare OPPS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for payer_slug, payer_data in analysis.payer_breakdown.items %}
+                                            <tr>
+                                                <td><strong>{{ payer_slug|title|replace:"-| " }}</strong></td>
+                                                <td class="text-end">
+                                                    {% if payer_data.medicare_professional.avg_rate %}
+                                                        <span class="text-primary">${{ payer_data.medicare_professional.avg_rate|floatformat:2 }}</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if payer_data.percentage_analysis.prof_avg_pct %}
+                                                        <span class="text-warning fw-bold">{{ payer_data.percentage_analysis.prof_avg_pct|floatformat:1 }}%</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if payer_data.medicare_asc.avg_rate %}
+                                                        <span class="text-info">${{ payer_data.medicare_asc.avg_rate|floatformat:2 }}</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if payer_data.percentage_analysis.asc_avg_pct %}
+                                                        <span class="text-warning fw-bold">{{ payer_data.percentage_analysis.asc_avg_pct|floatformat:1 }}%</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if payer_data.medicare_opps.avg_rate %}
+                                                        <span class="text-info">${{ payer_data.medicare_opps.avg_rate|floatformat:2 }}</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-end">
+                                                    {% if payer_data.percentage_analysis.opps_avg_pct %}
+                                                        <span class="text-warning fw-bold">{{ payer_data.percentage_analysis.opps_avg_pct|floatformat:1 }}%</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Key Metrics Analysis -->
             {% if analysis.key_metrics %}

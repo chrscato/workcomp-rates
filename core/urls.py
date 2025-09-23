@@ -4,6 +4,8 @@ from . import views
 urlpatterns = [
     path('', views.home, name='home'),
     path('commercial/insights/', views.commercial_rate_insights_tile, name='commercial_rate_insights'),
+    path('commercial/insights/data-availability/', views.data_availability_overview, name='data_availability_overview'),
+    path('commercial/insights/data-availability-test/', views.data_availability_test, name='data_availability_overview_test'),
     path('commercial/insights/dataset-review/loading/', views.dataset_review_loading, name='dataset_review_loading'),
     path('commercial/insights/dataset-review/map/', views.dataset_review_map, name='dataset_review_map'),
     path('commercial/insights/dataset-review/', views.dataset_review, name='dataset_review'),

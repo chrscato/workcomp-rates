@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Test Data Availability - WorkComp Rates{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h1>Test Data Availability</h1>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Test Data</h5>
+                </div>
+                <div class="card-body">
+                    <p>Has Data: {{ has_data }}</p>
+                    <p>Availability Metrics: {{ availability_metrics }}</p>
+                    <p>Summary Stats: {{ availability_metrics.summary_stats }}</p>
+                    <p>Partition Count (raw): {{ availability_metrics.summary_stats.partition_count }}</p>
+                    <p>Partition Count (intcomma): {{ availability_metrics.summary_stats.partition_count|intcomma }}</p>
+                    <p>Total Records (raw): {{ availability_metrics.summary_stats.total_estimated_records }}</p>
+                    <p>Total Records (intcomma): {{ availability_metrics.summary_stats.total_estimated_records|intcomma }}</p>
+                    <p>Total Size (raw): {{ availability_metrics.summary_stats.total_size_mb }}</p>
+                    <p>Total Size (floatformat): {{ availability_metrics.summary_stats.total_size_mb|floatformat:1 }}</p>
+                    <p>Unique Payers: {{ availability_metrics.summary_stats.unique_payers }}</p>
+                    <p>Unique States: {{ availability_metrics.summary_stats.unique_states }}</p>
+                    <p>Unique Taxonomies: {{ availability_metrics.summary_stats.unique_taxonomies }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

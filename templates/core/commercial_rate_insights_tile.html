@@ -97,6 +97,11 @@
                         <h4 class="mb-0">Commercial Rate Insights</h4>
                         <p class="text-muted mb-0">Tile-based partition discovery and analysis</p>
                     </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'data_availability_overview' %}" class="btn btn-outline-info">
+                            <i class="fas fa-database me-2"></i>Data Availability
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -142,7 +147,7 @@
                     <div class="col-md-3">
                         <div class="summary-metric">
                             {% if has_required_filters %}
-                   <a href="{% url 'dataset_review_loading' %}?{% for key, value in current_filters.items %}{{ key }}={{ value }}&{% endfor %}" 
+                   <a href="{% url 'dataset_review_loading' %}?{% for key, value in current_filters.items %}{% if key == 'payer_slug' and value|length > 0 %}{% for slug in value %}{{ key }}={{ slug }}&{% endfor %}{% else %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
                       class="btn btn-primary btn-lg">
                                     <i class="bi bi-search me-2"></i> Review Dataset
                                 </a>
@@ -176,12 +181,11 @@
                     <label for="payer_slug" class="form-label fw-bold">
                         <i class="bi bi-building text-primary me-1"></i> Payer *
                     </label>
-                    <select class="form-select" id="payer_slug" name="payer_slug" required>
-                        <option value="">Choose a Payer</option>
+                    <select class="form-select select2-dropdown" id="payer_slug" name="payer_slug" multiple required>
                         {% for option in filter_options.payer_slug %}
                             {% with option_parts=option|split:'|' %}
                             <option value="{{ option_parts|first }}" 
-                                    {% if current_filters.payer_slug == option_parts|first %}selected{% endif %}>
+                                    {% if current_filters.payer_slug and option_parts|first in current_filters.payer_slug %}selected{% endif %}>
                                 {{ option_parts|last }}
                             </option>
                             {% endwith %}
@@ -401,6 +405,56 @@
                         </div>
                     </div>
 
+                    <!-- Payer Breakdown (if multiple payers selected) -->
+                    {% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-building text-primary me-1"></i>
+                                        Payer Breakdown
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Payer</th>
+                                                    <th class="text-end">Records</th>
+                                                    <th class="text-end">Partitions</th>
+                                                    <th class="text-end">Size (MB)</th>
+                                                    <th class="text-end">% of Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for payer in partition_summary.payer_breakdown %}
+                                                <tr>
+                                                    <td>
+                                                        <strong>{{ payer.payer_display_name }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">{{ payer.payer_slug }}</small>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="badge bg-primary">{{ payer.estimated_records|intcomma }}</span>
+                                                    </td>
+                                                    <td class="text-end">{{ payer.partition_count }}</td>
+                                                    <td class="text-end">{{ payer.file_size_mb }}</td>
+                                                    <td class="text-end">
+                                                        {% widthratio payer.estimated_records partition_summary.total_estimated_records 100 %}%
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <!-- Available Filter Options -->
                     <div class="row">
                         {% for filter_name, options in partition_summary.available_filters.items %}
@@ -429,8 +483,23 @@
                     </div>
 
                     <!-- Data Distribution Charts -->
-                    {% if partition_summary.available_filters.procedure_set %}
                     <div class="row mt-4">
+                        {% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-pie-chart text-primary me-1"></i>
+                                        Payer Records Distribution
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="payerDistributionChart" width="400" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if partition_summary.available_filters.procedure_set %}
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header">
@@ -444,6 +513,10 @@
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
+                    </div>
+                    {% if partition_summary.available_filters.stat_area_name %}
+                    <div class="row mt-4">
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header">
@@ -520,18 +593,40 @@ $(document).ready(function() {
         }
     });
     
+    // Initialize Select2 for multiple select dropdowns with special configuration
+    $('.select2-dropdown').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Select one or more options...',
+        allowClear: true,
+        closeOnSelect: false
+    });
+    
     // Add form validation
     $('#filterForm').on('submit', function(e) {
         const requiredFields = ['payer_slug', 'state', 'billing_class'];
         let isValid = true;
         
         requiredFields.forEach(function(field) {
-            const value = $('#' + field).val();
-            if (!value) {
-                $('#' + field).addClass('is-invalid');
-                isValid = false;
+            const $field = $('#' + field);
+            const value = $field.val();
+            
+            // Handle multiple select fields (payer_slug)
+            if (field === 'payer_slug') {
+                if (!value || value.length === 0) {
+                    $field.addClass('is-invalid');
+                    isValid = false;
+                } else {
+                    $field.removeClass('is-invalid');
+                }
             } else {
-                $('#' + field).removeClass('is-invalid');
+                // Handle single select fields
+                if (!value) {
+                    $field.addClass('is-invalid');
+                    isValid = false;
+                } else {
+                    $field.removeClass('is-invalid');
+                }
             }
         });
         
@@ -542,6 +637,10 @@ $(document).ready(function() {
     });
 
     // Create charts if data is available
+    {% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
+    createPayerDistributionChart();
+    {% endif %}
+    
     {% if partition_summary.available_filters.procedure_set %}
     createProcedureSetChart();
     {% endif %}
@@ -550,6 +649,61 @@ $(document).ready(function() {
     createStatAreaChart();
     {% endif %}
 });
+
+{% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
+function createPayerDistributionChart() {
+    const ctx = document.getElementById('payerDistributionChart').getContext('2d');
+    const payerData = {{ partition_summary.payer_breakdown|safe }};
+    
+    // Extract labels and data
+    const labels = payerData.map(payer => payer.payer_display_name);
+    const data = payerData.map(payer => payer.estimated_records);
+    
+    // Generate colors for each payer
+    const colors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
+        '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
+    ];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true,
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const payer = payerData[context.dataIndex];
+                            const percentage = ((payer.estimated_records / {{ partition_summary.total_estimated_records }}) * 100).toFixed(1);
+                            return `${context.label}: ${payer.estimated_records.toLocaleString()} records (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+{% endif %}
 
 {% if partition_summary.available_filters.procedure_set %}
 function createProcedureSetChart() {

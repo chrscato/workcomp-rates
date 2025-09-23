@@ -16,6 +16,85 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+def _get_payer_breakdown_analysis(df, selected_payer_slugs):
+    """Get detailed breakdown analysis for selected payer slugs"""
+    if df is None or df.empty or not selected_payer_slugs:
+        return {}
+    
+    # Ensure we have the required columns
+    if 'payer_slug' not in df.columns:
+        return {}
+    
+    # Filter to only selected payer slugs
+    filtered_df = df[df['payer_slug'].isin(selected_payer_slugs)]
+    
+    if filtered_df.empty:
+        return {}
+    
+    breakdown = {}
+    
+    # Group by payer_slug and calculate comprehensive statistics
+    payer_stats = filtered_df.groupby('payer_slug').agg({
+        'negotiated_rate': ['count', 'mean', 'median', 'std', 'min', 'max'],
+        'medicare_professional_rate': ['count', 'mean', 'median'],
+        'medicare_asc_stateavg': ['count', 'mean', 'median'],
+        'medicare_opps_stateavg': ['count', 'mean', 'median'],
+        'negotiated_rate_pct_of_medicare_professional': ['count', 'mean', 'median'],
+        'negotiated_rate_pct_of_medicare_asc': ['count', 'mean', 'median'],
+        'negotiated_rate_pct_of_medicare_opps': ['count', 'mean', 'median'],
+        'organization_name': 'nunique',
+        'primary_taxonomy_desc': 'nunique',
+        'stat_area_name': 'nunique'
+    }).round(2)
+    
+    # Flatten column names
+    payer_stats.columns = ['_'.join(col).strip() for col in payer_stats.columns]
+    payer_stats = payer_stats.reset_index()
+    
+    # Convert to list of dictionaries with proper formatting
+    for _, row in payer_stats.iterrows():
+        payer_slug = row['payer_slug']
+        breakdown[payer_slug] = {
+            'payer_slug': payer_slug,
+            'record_count': int(row['negotiated_rate_count']),
+            'avg_negotiated_rate': row['negotiated_rate_mean'],
+            'median_negotiated_rate': row['negotiated_rate_median'],
+            'std_negotiated_rate': row['negotiated_rate_std'],
+            'min_negotiated_rate': row['negotiated_rate_min'],
+            'max_negotiated_rate': row['negotiated_rate_max'],
+            'unique_organizations': int(row['organization_name_nunique']),
+            'unique_taxonomies': int(row['primary_taxonomy_desc_nunique']),
+            'unique_stat_areas': int(row['stat_area_name_nunique']),
+            'medicare_professional': {
+                'count': int(row['medicare_professional_rate_count']),
+                'avg_rate': row['medicare_professional_rate_mean'],
+                'median_rate': row['medicare_professional_rate_median']
+            },
+            'medicare_asc': {
+                'count': int(row['medicare_asc_stateavg_count']),
+                'avg_rate': row['medicare_asc_stateavg_mean'],
+                'median_rate': row['medicare_asc_stateavg_median']
+            },
+            'medicare_opps': {
+                'count': int(row['medicare_opps_stateavg_count']),
+                'avg_rate': row['medicare_opps_stateavg_mean'],
+                'median_rate': row['medicare_opps_stateavg_median']
+            },
+            'percentage_analysis': {
+                'prof_count': int(row['negotiated_rate_pct_of_medicare_professional_count']),
+                'prof_avg_pct': row['negotiated_rate_pct_of_medicare_professional_mean'],
+                'prof_median_pct': row['negotiated_rate_pct_of_medicare_professional_median'],
+                'asc_count': int(row['negotiated_rate_pct_of_medicare_asc_count']),
+                'asc_avg_pct': row['negotiated_rate_pct_of_medicare_asc_mean'],
+                'asc_median_pct': row['negotiated_rate_pct_of_medicare_asc_median'],
+                'opps_count': int(row['negotiated_rate_pct_of_medicare_opps_count']),
+                'opps_avg_pct': row['negotiated_rate_pct_of_medicare_opps_mean'],
+                'opps_median_pct': row['negotiated_rate_pct_of_medicare_opps_median']
+            }
+        }
+    
+    return breakdown
+
 
 @login_required
 def home(request):
@@ -44,7 +123,7 @@ def commercial_rate_insights_tile(request):
         
         # Get current filters from request
         current_filters = {
-            'payer_slug': request.GET.get('payer_slug'),
+            'payer_slug': request.GET.getlist('payer_slug'),
             'state': request.GET.get('state'),
             'billing_class': request.GET.get('billing_class'),
             'procedure_set': request.GET.get('procedure_set'),
@@ -1121,7 +1200,7 @@ def dataset_review(request):
         
         # Get filters from request
         filters = {
-            'payer_slug': request.GET.get('payer_slug'),
+            'payer_slug': request.GET.getlist('payer_slug'),
             'state': request.GET.get('state'),
             'billing_class': request.GET.get('billing_class'),
             'procedure_set': request.GET.get('procedure_set'),
@@ -1246,6 +1325,11 @@ def dataset_review(request):
         
         # Add key metrics analysis
         analysis['key_metrics'] = {}
+        
+        # Add payer breakdown if multiple payers selected
+        if filters.get('payer_slug') and len(filters['payer_slug']) > 1:
+            analysis['payer_breakdown'] = _get_payer_breakdown_analysis(combined_df, filters['payer_slug'])
+        
         key_metric_columns = [
             'stat_area_name', 'tin_value', 'county_name', 
             'primary_taxonomy_desc', 'enumeration_type', 'organization_name'
@@ -1555,6 +1639,73 @@ def dataset_review(request):
         }
     
     return render(request, 'core/dataset_review.html', context)
+
+
+@login_required
+def data_availability_overview(request):
+    """
+    Data Availability Overview Page
+    Shows comprehensive data availability metrics based on partition navigation database
+    """
+    try:
+        # Initialize partition navigator
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db',
+            s3_bucket='partitioned-data'
+        )
+        
+        # Get comprehensive data availability metrics
+        availability_metrics = navigator.get_data_availability_metrics()
+        
+        context = {
+            'availability_metrics': availability_metrics,
+            'has_data': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in data_availability_overview view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading data availability metrics.',
+            'availability_metrics': {}
+        }
+    
+    return render(request, 'core/data_availability_overview.html', context)
+
+
+@login_required
+def data_availability_test(request):
+    """
+    Test view for data availability with simple template
+    """
+    try:
+        # Initialize partition navigator
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db',
+            s3_bucket='partitioned-data'
+        )
+        
+        # Get comprehensive data availability metrics
+        availability_metrics = navigator.get_data_availability_metrics()
+        
+        context = {
+            'availability_metrics': availability_metrics,
+            'has_data': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in data_availability_test view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading data availability metrics.',
+            'availability_metrics': {}
+        }
+    
+    return render(request, 'core/test_data_availability.html', context)
 
 
 @login_required

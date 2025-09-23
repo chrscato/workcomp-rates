@@ -208,8 +208,17 @@ class PartitionNavigator:
         # Apply required filters
         for filter_key in self.required_filters:
             if filters.get(filter_key):
-                where_conditions.append(f"p.{filter_key} = ?")
-                params.append(filters[filter_key])
+                # Handle multiple values for payer_slug
+                if filter_key == 'payer_slug' and isinstance(filters[filter_key], list):
+                    if len(filters[filter_key]) > 0:
+                        placeholders = ','.join(['?' for _ in filters[filter_key]])
+                        where_conditions.append(f"p.{filter_key} IN ({placeholders})")
+                        params.extend(filters[filter_key])
+                    elif require_top_levels:
+                        return pd.DataFrame()  # Return empty if required filters missing
+                else:
+                    where_conditions.append(f"p.{filter_key} = ?")
+                    params.append(filters[filter_key])
             elif require_top_levels:
                 return pd.DataFrame()  # Return empty if required filters missing
         
@@ -546,7 +555,8 @@ class PartitionNavigator:
                 'partition_count': 0,
                 'total_size_mb': 0,
                 'total_estimated_records': 0,
-                'available_filters': {}
+                'available_filters': {},
+                'payer_breakdown': []
             }
         
         # Calculate summary statistics
@@ -559,13 +569,225 @@ class PartitionNavigator:
             if col in results_df.columns:
                 available_filters[col] = results_df[col].dropna().unique().tolist()
         
+        # Get payer breakdown if payer_slug filters are applied
+        payer_breakdown = []
+        if filters.get('payer_slug') and 'payer_slug' in results_df.columns:
+            payer_breakdown = self._get_payer_breakdown(results_df, filters['payer_slug'])
+        
         return {
             'partition_count': len(results_df),
             'total_size_mb': round(total_size, 2),
             'total_estimated_records': int(total_records),
             'available_filters': available_filters,
-            'partitions': results_df.to_dict('records')
+            'partitions': results_df.to_dict('records'),
+            'payer_breakdown': payer_breakdown
         }
+    
+    def get_data_availability_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive data availability metrics from the partition navigation database"""
+        try:
+            # Connect to database
+            self.connect_db()
+            
+            # Get overall summary statistics
+            summary_query = """
+                SELECT 
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records,
+                    COUNT(DISTINCT payer_slug) as unique_payers,
+                    COUNT(DISTINCT state) as unique_states,
+                    COUNT(DISTINCT billing_class) as unique_billing_classes,
+                    COUNT(DISTINCT procedure_set) as unique_procedure_sets,
+                    COUNT(DISTINCT taxonomy_code) as unique_taxonomies,
+                    COUNT(DISTINCT stat_area_name) as unique_stat_areas,
+                    COUNT(DISTINCT year) as unique_years,
+                    COUNT(DISTINCT month) as unique_months
+                FROM partitions
+            """
+            
+            summary_df = pd.read_sql_query(summary_query, self.conn)
+            summary_stats = summary_df.iloc[0].to_dict()
+            
+            # Get payer breakdown
+            payer_query = """
+                SELECT 
+                    p.payer_slug,
+                    dp.payer_display_name,
+                    COUNT(*) as partition_count,
+                    SUM(p.file_size_mb) as total_size_mb,
+                    SUM(p.estimated_records) as total_estimated_records
+                FROM partitions p
+                LEFT JOIN dim_payers dp ON p.payer_slug = dp.payer_slug
+                GROUP BY p.payer_slug, dp.payer_display_name
+                ORDER BY total_estimated_records DESC
+            """
+            
+            payer_df = pd.read_sql_query(payer_query, self.conn)
+            payer_breakdown = payer_df.to_dict('records')
+            
+            # Get state breakdown (top 20)
+            state_query = """
+                SELECT 
+                    state,
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records
+                FROM partitions
+                WHERE state IS NOT NULL
+                GROUP BY state
+                ORDER BY total_estimated_records DESC
+                LIMIT 20
+            """
+            
+            state_df = pd.read_sql_query(state_query, self.conn)
+            state_breakdown = state_df.to_dict('records')
+            
+            # Get billing class breakdown
+            billing_class_query = """
+                SELECT 
+                    billing_class,
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records
+                FROM partitions
+                WHERE billing_class IS NOT NULL
+                GROUP BY billing_class
+                ORDER BY total_estimated_records DESC
+            """
+            
+            billing_class_df = pd.read_sql_query(billing_class_query, self.conn)
+            billing_class_breakdown = billing_class_df.to_dict('records')
+            
+            # Get procedure set breakdown
+            procedure_set_query = """
+                SELECT 
+                    procedure_set,
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records
+                FROM partitions
+                WHERE procedure_set IS NOT NULL
+                GROUP BY procedure_set
+                ORDER BY total_estimated_records DESC
+            """
+            
+            procedure_set_df = pd.read_sql_query(procedure_set_query, self.conn)
+            procedure_set_breakdown = procedure_set_df.to_dict('records')
+            
+            # Get taxonomy breakdown (top 20)
+            taxonomy_query = """
+                SELECT 
+                    taxonomy_code,
+                    taxonomy_desc,
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records
+                FROM partitions
+                WHERE taxonomy_code IS NOT NULL
+                GROUP BY taxonomy_code, taxonomy_desc
+                ORDER BY total_estimated_records DESC
+                LIMIT 20
+            """
+            
+            taxonomy_df = pd.read_sql_query(taxonomy_query, self.conn)
+            taxonomy_breakdown = taxonomy_df.to_dict('records')
+            
+            # Get time period breakdown
+            time_period_query = """
+                SELECT 
+                    year,
+                    month,
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records
+                FROM partitions
+                WHERE year IS NOT NULL AND month IS NOT NULL
+                GROUP BY year, month
+                ORDER BY year DESC, month DESC
+            """
+            
+            time_period_df = pd.read_sql_query(time_period_query, self.conn)
+            time_period_breakdown = time_period_df.to_dict('records')
+            
+            # Get statistical area breakdown (top 20)
+            stat_area_query = """
+                SELECT 
+                    stat_area_name,
+                    COUNT(*) as partition_count,
+                    SUM(file_size_mb) as total_size_mb,
+                    SUM(estimated_records) as total_estimated_records
+                FROM partitions
+                WHERE stat_area_name IS NOT NULL
+                GROUP BY stat_area_name
+                ORDER BY total_estimated_records DESC
+                LIMIT 20
+            """
+            
+            stat_area_df = pd.read_sql_query(stat_area_query, self.conn)
+            stat_area_breakdown = stat_area_df.to_dict('records')
+            
+            return {
+                'summary_stats': summary_stats,
+                'payer_breakdown': payer_breakdown,
+                'state_breakdown': state_breakdown,
+                'billing_class_breakdown': billing_class_breakdown,
+                'procedure_set_breakdown': procedure_set_breakdown,
+                'taxonomy_breakdown': taxonomy_breakdown,
+                'time_period_breakdown': time_period_breakdown,
+                'stat_area_breakdown': stat_area_breakdown
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting data availability metrics: {e}")
+            return {
+                'summary_stats': {},
+                'payer_breakdown': [],
+                'state_breakdown': [],
+                'billing_class_breakdown': [],
+                'procedure_set_breakdown': [],
+                'taxonomy_breakdown': [],
+                'time_period_breakdown': [],
+                'stat_area_breakdown': []
+            }
+
+    def _get_payer_breakdown(self, results_df: pd.DataFrame, selected_payer_slugs: List[str]) -> List[Dict[str, Any]]:
+        """Get breakdown of records by selected payer slugs"""
+        if results_df.empty or not selected_payer_slugs:
+            return []
+        
+        # Ensure we have the required columns
+        if 'payer_slug' not in results_df.columns or 'estimated_records' not in results_df.columns:
+            return []
+        
+        # Filter to only selected payer slugs
+        filtered_df = results_df[results_df['payer_slug'].isin(selected_payer_slugs)]
+        
+        if filtered_df.empty:
+            return []
+        
+        # Group by payer_slug and calculate statistics
+        payer_stats = filtered_df.groupby('payer_slug').agg({
+            'estimated_records': 'sum',
+            'file_size_mb': 'sum',
+            'payer_display_name': 'first'  # Get the display name
+        }).reset_index()
+        
+        # Sort by estimated records descending
+        payer_stats = payer_stats.sort_values('estimated_records', ascending=False)
+        
+        # Convert to list of dictionaries
+        breakdown = []
+        for _, row in payer_stats.iterrows():
+            breakdown.append({
+                'payer_slug': row['payer_slug'],
+                'payer_display_name': row['payer_display_name'] if pd.notna(row['payer_display_name']) else row['payer_slug'],
+                'estimated_records': int(row['estimated_records']),
+                'file_size_mb': round(row['file_size_mb'], 2),
+                'partition_count': len(filtered_df[filtered_df['payer_slug'] == row['payer_slug']])
+            })
+        
+        return breakdown
     
     def analyze_combined_data(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Analyze combined partition data"""

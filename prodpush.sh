@@ -65,7 +65,7 @@ print_success "GitHub push completed"
 
 # Step 2: Deploy to server
 print_status "Deploying to production server..."
-print_status "You will be prompted for the server password (bph2025Project)"
+print_status "You will be prompted for the server password"
 
 ssh $SERVER_USER@$SERVER_IP << 'EOF'
     set -e
