@@ -3,7 +3,12 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('dashboard/', views.commercial_rate_insights_tile, name='dashboard'),  # Main entry point
     path('commercial/insights/', views.commercial_rate_insights_tile, name='commercial_rate_insights'),
+    path('transparency/<str:state>/', views.transparency_dashboard, name='transparency'),
+    path('transparency/<str:state>/analysis/', views.rate_analysis, name='rate_analysis'),
+    path('benchmarks/compare/', views.benchmark_comparison, name='benchmark_compare'),
+    path('steerage/preview/', views.steerage_preview, name='steerage_preview'),  # Stage 3 preview
     path('commercial/insights/data-availability/', views.data_availability_overview, name='data_availability_overview'),
     path('commercial/insights/data-availability-test/', views.data_availability_test, name='data_availability_overview_test'),
     path('commercial/insights/dataset-review/loading/', views.dataset_review_loading, name='dataset_review_loading'),

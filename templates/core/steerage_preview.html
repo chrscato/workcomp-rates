@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Steerage Guidance Agent - Coming Soon{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="steerage-preview-section">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-compass"></i> Steerage Guidance Agent (Coming Soon)</h5>
+            </div>
+            <div class="card-body">
+                <p>AI-powered decision support for claims adjustors and risk managers.</p>
+                
+                <div class="feature-preview">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="feature-card">
+                                <i class="fas fa-brain fa-2x text-primary mb-2"></i>
+                                <h6>Predictive Bundling</h6>
+                                <small>AI predicts procedure bundles from injury details</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="feature-card">
+                                <i class="fas fa-map-marked-alt fa-2x text-success mb-2"></i>
+                                <h6>Geo-Optimized Routing</h6>
+                                <small>Find closest cost-effective providers using H3 indexing</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="feature-card">
+                                <i class="fas fa-dollar-sign fa-2x text-warning mb-2"></i>
+                                <h6>ROI Tracking</h6>
+                                <small>Measure steerage savings in real-time</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="btn btn-outline-primary mt-3" onclick="requestDemo()">
+                    Request Early Access
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function requestDemo() {
+    alert('Thank you for your interest! Please contact your account manager for early access to the Steerage Guidance Agent.');
+}
+</script>
+{% endblock %}

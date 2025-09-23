@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ state_name }} Rate Analysis - WorkComp Rates{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Context Header -->
+    {% include 'core/components/context_header.html' with payer_name="Multiple Networks" state=state_name savings_potential=87500 %}
+    
+    {% if has_data %}
+        <!-- Filters Section -->
+        <div class="filter-section">
+            <h5 class="mb-3">Refine Discovery</h5>
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Payer Network</label>
+                    <select name="payer" class="form-select" multiple>
+                        {% for payer in filters.payers %}
+                            <option value="{{ payer }}" {% if payer in active_filters.payer %}selected{% endif %}>{{ payer }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Procedure Set</label>
+                    <select name="procedure_set" class="form-select" multiple>
+                        {% for proc_set in filters.procedure_sets %}
+                            <option value="{{ proc_set }}" {% if proc_set in active_filters.procedure_set %}selected{% endif %}>{{ proc_set }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Organization</label>
+                    <select name="org_name" class="form-select" multiple>
+                        {% for org in filters.organizations %}
+                            <option value="{{ org }}" {% if org in active_filters.org_name %}selected{% endif %}>{{ org }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Billing Code</label>
+                    <select name="billing_code" class="form-select" multiple>
+                        {% for code in filters.billing_codes %}
+                            <option value="{{ code }}" {% if code in active_filters.billing_code %}selected{% endif %}>{{ code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Refine Discovery
+                    </button>
+                    <a href="{% url 'rate_analysis' state=state_code %}" class="btn btn-outline-secondary ms-2">Clear Filters</a>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3>${{ stats.avg_negotiated_rate|floatformat:0|default:"0" }}</h3>
+                    <p>Avg Negotiated Rate</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3>{{ stats.record_count|default:"0" }}</h3>
+                    <p>Total Records</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3>{{ stats.unique_payers|default:"0" }}</h3>
+                    <p>Payer Networks</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h3>{{ stats.unique_organizations|default:"0" }}</h3>
+                    <p>Organizations</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sample Records Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Intelligence Report Sample</h5>
+            </div>
+            <div class="card-body">
+                {% if sample_records %}
+                    <div class="table-responsive">
+                        <table class="table data-table-professional">
+                            <thead>
+                                <tr>
+                                    <th>Payer</th>
+                                    <th>Organization</th>
+                                    <th>Procedure Code</th>
+                                    <th>Negotiated Rate</th>
+                                    <th>WC Fee Schedule</th>
+                                    <th>Medicare Rate</th>
+                                    <th>Savings Potential</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in sample_records %}
+                                <tr>
+                                    <td>{{ record.payer|default:"N/A" }}</td>
+                                    <td>{{ record.org_name|default:"N/A" }}</td>
+                                    <td>{{ record.billing_code|default:"N/A" }}</td>
+                                    <td>${{ record.negotiated_rate|floatformat:2|default:"0.00" }}</td>
+                                    <td>${{ record.wc_fee_schedule|floatformat:2|default:"N/A" }}</td>
+                                    <td>${{ record.medicare_rate|floatformat:2|default:"N/A" }}</td>
+                                    <td>
+                                        {% if record.savings_potential %}
+                                            <span class="text-success">${{ record.savings_potential|floatformat:2 }}</span>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No records found matching the selected criteria.</p>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <!-- Error Message -->
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Data Access Notice</h5>
+                    <p>{{ error_message }}</p>
+                    <a href="{% url 'transparency' state=state_code %}" class="btn btn-primary">Return to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

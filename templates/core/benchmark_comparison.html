@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Multi-Benchmark Comparison - WorkComp Rates{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Context Header -->
+    {% include 'core/components/context_header.html' with payer_name="Commercial Network" state="GA" savings_potential=125000 %}
+    
+    <!-- Benchmark Comparison Chart -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h5>Multi-Benchmark Rate Analysis</h5>
+                <div id="benchmarkChart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Steerage Opportunities -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            {% include 'core/components/steerage_card.html' with procedure_name="Office Visit - Established Patient" current_rate="150.00" recommended_rate="120.00" savings="30.00" savings_percent="20" %}
+        </div>
+        <div class="col-md-6">
+            {% include 'core/components/steerage_card.html' with procedure_name="Physical Therapy - 30 minutes" current_rate="85.00" recommended_rate="65.00" savings="20.00" savings_percent="23" %}
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// Multi-benchmark comparison chart
+function renderBenchmarkComparison(data) {
+    const trace1 = {
+        x: data.procedures,
+        y: data.commercial_rates,
+        name: 'Commercial MRF',
+        type: 'bar',
+        marker: { color: '#1e3a8a' }
+    };
+    
+    const trace2 = {
+        x: data.procedures,
+        y: data.wc_fee_schedule,
+        name: 'WC Fee Schedule',
+        type: 'bar',
+        marker: { color: '#059669' }
+    };
+    
+    const trace3 = {
+        x: data.procedures,
+        y: data.medicare_rates,
+        name: 'Medicare',
+        type: 'bar',
+        marker: { color: '#f59e0b' }
+    };
+    
+    const layout = {
+        title: 'Multi-Benchmark Rate Analysis',
+        barmode: 'group',
+        hovermode: 'x unified',
+        xaxis: { title: 'Procedure Codes' },
+        yaxis: { title: 'Allowed Amount ($)' }
+    };
+    
+    Plotly.newPlot('benchmarkChart', [trace1, trace2, trace3], layout);
+}
+
+// Sample data for demonstration
+const sampleData = {
+    procedures: ['99213', '99214', '97110', '97112', '97530'],
+    commercial_rates: [150, 200, 85, 95, 120],
+    wc_fee_schedule: [120, 180, 65, 75, 100],
+    medicare_rates: [100, 160, 55, 65, 90]
+};
+
+// Render chart on page load
+document.addEventListener('DOMContentLoaded', function() {
+    renderBenchmarkComparison(sampleData);
+});
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,64 @@
+<div class="hierarchical-search-panel">
+    <h5 class="mb-3">
+        <i class="fas fa-filter"></i> Hierarchical Rate Discovery
+    </h5>
+    
+    <!-- Tier 1: Required Filters -->
+    <div class="filter-tier required-tier">
+        <div class="tier-badge">Required</div>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">1. Payer Network</label>
+                <select class="form-select" id="payer-select" required>
+                    <option value="">Select Payer...</option>
+                    <option value="united">UnitedHealthcare</option>
+                    <option value="aetna">Aetna</option>
+                    <option value="cigna">Cigna</option>
+                </select>
+            </div>
+            
+            <div class="col-md-4">
+                <label class="form-label fw-bold">2. State</label>
+                <select class="form-select" id="state-select" required disabled>
+                    <option value="">Select State...</option>
+                </select>
+            </div>
+            
+            <div class="col-md-4">
+                <label class="form-label fw-bold">3. Billing Class</label>
+                <select class="form-select" id="billing-class-select" required disabled>
+                    <option value="">Select Class...</option>
+                    <option value="professional">Professional</option>
+                    <option value="facility">Facility</option>
+                    <option value="asc">ASC</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tier 2: Optional Refinements -->
+    <div class="filter-tier optional-tier mt-3">
+        <div class="tier-badge">Optional Refinements</div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">Procedure Set/Class</label>
+                <select class="form-select" id="procedure-filter">
+                    <option value="">All Procedures...</option>
+                </select>
+            </div>
+            
+            <div class="col-md-6">
+                <label class="form-label">Provider Taxonomy</label>
+                <select class="form-select" id="taxonomy-filter">
+                    <option value="">All Specialties...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <button class="btn btn-primary mt-3" onclick="executeSearch()">
+        <i class="fas fa-search"></i> Discover Rates
+    </button>
+</div>

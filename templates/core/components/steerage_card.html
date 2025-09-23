@@ -1,0 +1,25 @@
+<div class="steerage-opportunity-card">
+    <div class="card border-success">
+        <div class="card-header bg-success text-white">
+            <i class="fas fa-route"></i> Steerage Opportunity Detected
+        </div>
+        <div class="card-body">
+            <h5>{{ procedure_name }}</h5>
+            <div class="row mt-3">
+                <div class="col-6">
+                    <small class="text-muted">Current Provider</small>
+                    <p class="mb-0 fw-bold">${{ current_rate|floatformat:2 }}</p>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted">Recommended Provider</small>
+                    <p class="mb-0 fw-bold text-success">${{ recommended_rate|floatformat:2 }}</p>
+                </div>
+            </div>
+            <div class="savings-badge mt-2">
+                <span class="badge bg-success">
+                    Save ${{ savings|floatformat:2 }} ({{ savings_percent }}%)
+                </span>
+            </div>
+        </div>
+    </div>
+</div>

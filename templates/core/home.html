@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Commercial Rates - Competitive Intelligence{% endblock %}
+{% block title %}WorkComp Rates - Transparency & Steerage Platform{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -10,12 +10,33 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body text-center">
-                    <h1 class="display-4 text-primary mb-3">Commercial Rate Insights</h1>
-                    <p class="lead text-muted">Competitive intelligence tool to understand how commercial payers like UnitedHealthcare and Aetna are paying benchmarked against Medicare and State Workers' Comp Fee Schedules</p>
-                    <p class="text-muted">For both Professional and Facility reimbursement. Hospital Outpatient and ASC methodologies.</p>
+                    <h1 class="display-4 text-primary mb-3">WorkComp Rates</h1>
+                    <h2 class="h3 text-muted">Transparency & Steerage Platform for Workers' Compensation</h2>
+                    
+                    <div class="value-props mt-4">
+                        <div class="badge bg-success p-2 m-1">Workers' Comp Specialist</div>
+                        <div class="badge bg-info p-2 m-1">Multi-Benchmark Analysis</div>
+                        <div class="badge bg-primary p-2 m-1">Cost Steerage Guidance</div>
+                    </div>
+                    
+                    <p class="lead mt-3">
+                        The only platform combining Commercial MRF rates, Workers' Comp Fee Schedules, 
+                        and Medicare benchmarks into a single queryable intelligence system.
+                    </p>
+                    
+                    <div class="target-audience mt-3">
+                        <small class="text-muted">Built for TPAs • Risk Managers • Payer Networks • Self-Insured Employers</small>
+                    </div>
+                    
                     <div class="mt-4">
-                        <a href="{% url 'commercial_rate_insights' %}" class="btn btn-primary btn-lg">
-                            <i class="bi bi-graph-up-arrow me-2"></i>View Rate Insights
+                        <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg me-3">
+                            <i class="bi bi-graph-up-arrow me-2"></i>Access Transparency Dashboard
+                        </a>
+                        <a href="{% url 'benchmark_compare' %}" class="btn btn-outline-success btn-lg me-3">
+                            <i class="bi bi-bar-chart me-2"></i>Benchmark Comparison
+                        </a>
+                        <a href="{% url 'steerage_preview' %}" class="btn btn-outline-warning btn-lg">
+                            <i class="bi bi-compass me-2"></i>Steerage Preview
                         </a>
                     </div>
                 </div>
@@ -31,8 +52,8 @@
                     <div class="mb-3">
                         <i class="bi bi-building text-primary" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Professional Reimbursement</h5>
-                    <p class="card-text">Analyze commercial payer rates for professional services benchmarked against Medicare and state fee schedules.</p>
+                    <h5 class="card-title">Workers' Comp Professional Rates</h5>
+                    <p class="card-text">Analyze commercial payer rates for professional services benchmarked against Medicare and Workers' Comp fee schedules.</p>
                     
                 </div>
             </div>
@@ -44,8 +65,8 @@
                     <div class="mb-3">
                         <i class="bi bi-hospital text-info" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Facility Reimbursement</h5>
-                    <p class="card-text">Compare Hospital Outpatient and ASC methodologies across commercial payers and Medicare benchmarks.</p>
+                    <h5 class="card-title">Workers' Comp Facility Rates</h5>
+                    <p class="card-text">Compare Hospital Outpatient and ASC methodologies across commercial payers and Workers' Comp benchmarks.</p>
                     
                 </div>
             </div>
@@ -57,8 +78,8 @@
                     <div class="mb-3">
                         <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
                     </div>
-                    <h5 class="card-title">Competitive Intelligence</h5>
-                    <p class="card-text">Benchmark your rates against UnitedHealthcare, Aetna, and other commercial payers with detailed analytics.</p>
+                    <h5 class="card-title">Multi-Benchmark Intelligence</h5>
+                    <p class="card-text">Benchmark Workers' Comp rates against UnitedHealthcare, Aetna, and other commercial payers with detailed analytics.</p>
                     
                 </div>
             </div>
@@ -94,7 +115,7 @@
                         </div>
                         <div class="col-md-3 text-center mb-3">
                             <div class="stats-card">
-                                <h3>State</h3>
+                                <h3>Workers' Comp</h3>
                                 <p>Fee Schedules</p>
                             </div>
                         </div>

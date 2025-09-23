@@ -1,0 +1,19 @@
+<div class="context-header">
+    <div class="row">
+        <div class="col-md-8">
+            <h4>Network Transparency Analysis</h4>
+            <p class="text-muted mb-0">
+                Comparing {{ payer_name }} negotiated rates against:
+                <span class="badge bg-success">Medicare OPPS</span>
+                <span class="badge bg-info">{{ state }} WC Fee Schedule</span>
+                <span class="badge bg-warning">ASC Benchmarks</span>
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <div class="metric-highlight">
+                <small class="text-muted">Potential Steerage Savings</small>
+                <h3 class="text-success">${{ savings_potential|floatformat:0 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>

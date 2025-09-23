@@ -1709,6 +1709,180 @@ def data_availability_test(request):
 
 
 @login_required
+def transparency_dashboard(request, state):
+    """
+    Transparency Dashboard for specific state
+    Shows Workers' Comp rate transparency analysis
+    """
+    try:
+        # Validate state code
+        state = state.upper()
+        available_states = ParquetDataManager.get_available_states()
+        
+        if state not in available_states or available_states[state] != 'available':
+            context = {
+                'has_data': False,
+                'error_message': f'Sorry, {state} data is not available yet. Please try another state.',
+                'state_code': state,
+                'state_name': ParquetDataManager.get_state_name(state)
+            }
+            return render(request, 'core/transparency_dashboard.html', context)
+        
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager
+        data_manager = ParquetDataManager(state=state, npi_type=npi_type)
+        
+        # Get overview statistics
+        overview_stats = data_manager.get_overview_statistics()
+        
+        context = {
+            'has_data': True,
+            'state_code': state,
+            'state_name': ParquetDataManager.get_state_name(state),
+            'overview_stats': overview_stats,
+            'npi_type': npi_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in transparency_dashboard view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading the transparency dashboard.',
+            'state_code': state,
+            'state_name': ParquetDataManager.get_state_name(state) if 'state' in locals() else 'Unknown'
+        }
+    
+    return render(request, 'core/transparency_dashboard.html', context)
+
+
+@login_required
+def rate_analysis(request, state):
+    """
+    Rate Analysis for specific state
+    Shows detailed rate analysis and benchmarking
+    """
+    try:
+        # Validate state code
+        state = state.upper()
+        available_states = ParquetDataManager.get_available_states()
+        
+        if state not in available_states or available_states[state] != 'available':
+            context = {
+                'has_data': False,
+                'error_message': f'Sorry, {state} data is not available yet. Please try another state.',
+                'state_code': state,
+                'state_name': ParquetDataManager.get_state_name(state)
+            }
+            return render(request, 'core/rate_analysis.html', context)
+        
+        # Get NPI type from request parameters
+        npi_type = request.GET.get('npi_type')
+        
+        # Initialize data manager
+        data_manager = ParquetDataManager(state=state, npi_type=npi_type)
+        
+        # Get active filters
+        active_filters = {
+            'payer': request.GET.getlist('payer'),
+            'procedure_set': request.GET.getlist('procedure_set'),
+            'procedure_class': request.GET.getlist('procedure_class'),
+            'org_name': request.GET.getlist('org_name'),
+            'tin_value': request.GET.getlist('tin_value'),
+            'billing_code': request.GET.getlist('billing_code')
+        }
+        
+        # Remove empty filters
+        active_filters = {k: v for k, v in active_filters.items() if v}
+        
+        # Get filtered options and statistics
+        filters = {
+            'payers': data_manager.get_unique_values('payer', active_filters),
+            'procedure_sets': data_manager.get_unique_values('procedure_set', active_filters),
+            'procedure_classes': data_manager.get_unique_values('procedure_class', active_filters),
+            'organizations': data_manager.get_unique_values('org_name', active_filters),
+            'tin_values': data_manager.get_unique_values('tin_value', active_filters),
+            'billing_codes': data_manager.get_unique_values('billing_code', active_filters),
+        }
+        
+        stats = data_manager.get_aggregated_stats(active_filters)
+        sample_records = data_manager.get_sample_records(active_filters, limit=10)
+        
+        context = {
+            'has_data': True,
+            'state_code': state,
+            'state_name': ParquetDataManager.get_state_name(state),
+            'filters': filters,
+            'stats': stats,
+            'active_filters': active_filters,
+            'sample_records': sample_records,
+            'npi_type': npi_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in rate_analysis view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading rate analysis.',
+            'state_code': state,
+            'state_name': ParquetDataManager.get_state_name(state) if 'state' in locals() else 'Unknown'
+        }
+    
+    return render(request, 'core/rate_analysis.html', context)
+
+
+@login_required
+def benchmark_comparison(request):
+    """
+    Benchmark Comparison Dashboard
+    Shows multi-benchmark comparison analysis
+    """
+    try:
+        # Get comparison parameters
+        payer = request.GET.get('payer')
+        state = request.GET.get('state')
+        billing_class = request.GET.get('billing_class')
+        
+        context = {
+            'has_data': True,
+            'payer': payer,
+            'state': state,
+            'billing_class': billing_class
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in benchmark_comparison view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading benchmark comparison.'
+        }
+    
+    return render(request, 'core/benchmark_comparison.html', context)
+
+
+@login_required
+def steerage_preview(request):
+    """
+    Steerage Preview Dashboard (Stage 3 Foundation)
+    Shows preview of steerage guidance capabilities
+    """
+    try:
+        context = {
+            'has_data': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in steerage_preview view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading steerage preview.'
+        }
+    
+    return render(request, 'core/steerage_preview.html', context)
+
+
+@login_required
 @user_passes_test(lambda u: u.is_staff)
 def user_activity_dashboard(request):
     """Dashboard for viewing user activity data (staff only)."""
