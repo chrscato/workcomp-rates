@@ -1037,7 +1037,12 @@ def dataset_review_map(request):
             map_df = combined_df.head(5000).copy()
             # Replace NaN/None values with empty strings or null
             map_df = map_df.fillna('')
-            map_df = map_df.replace({'None': '', None: ''})
+            # Convert None values to empty strings for JSON serialization
+            map_df = map_df.astype(str).replace('None', '')
+            # Clean any problematic characters that could cause JS syntax errors
+            for col in map_df.columns:
+                if map_df[col].dtype == 'object':
+                    map_df[col] = map_df[col].str.replace('&', '&amp;', regex=False)
             map_data = map_df.to_dict('records')
             
             # Debug logging
@@ -1059,6 +1064,8 @@ def dataset_review_map(request):
             logger.warning("No data available for map view")
         
         # Prepare context
+        import json
+        from django.utils.safestring import mark_safe
         context = {
             'filters': filters,
             'partitions_df': partitions_df,
@@ -1066,7 +1073,7 @@ def dataset_review_map(request):
                 'shape': combined_df.shape,
                 'columns': list(combined_df.columns)
             },
-            'sample_data': map_data,
+            'sample_data': mark_safe(json.dumps(map_data)) if map_data else '[]',
             'has_data': combined_df is not None and not combined_df.empty,
             'total_partitions': len(partitions_df),
             's3_paths_count': len(s3_paths)
