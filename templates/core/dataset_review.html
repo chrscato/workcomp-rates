@@ -71,9 +71,9 @@
                                 {% if value %}
                                     <div class="col-md-3 mb-2">
                                         <strong>{{ key|replace:"_| "|title }}:</strong>
-                                        {% if key == 'payer_slug' and value|length > 1 %}
-                                            {% for slug in value %}
-                                                <span class="badge bg-primary me-1">{{ slug|title|replace:"-| " }}</span>
+                                        {% if value|length > 1 %}
+                                            {% for item in value %}
+                                                <span class="badge bg-primary me-1">{{ item|title|replace:"-| " }}</span>
                                             {% endfor %}
                                         {% else %}
                                             <span class="badge bg-primary">{{ value|title|replace:"-| " }}</span>
@@ -102,7 +102,13 @@
                         <form method="get" id="additionalFiltersForm">
                             <!-- Preserve existing filters (explicit handling to avoid splitting strings into chars) -->
                             {% if filters.payer_slug %}
-                                <input type="hidden" name="payer_slug" value="{{ filters.payer_slug }}">
+                                {% if filters.payer_slug.0 %}
+                                    {% for item in filters.payer_slug %}
+                                        <input type="hidden" name="payer_slug" value="{{ item }}">
+                                    {% endfor %}
+                                {% else %}
+                                    <input type="hidden" name="payer_slug" value="{{ filters.payer_slug }}">
+                                {% endif %}
                             {% endif %}
                             {% if filters.state %}
                                 <input type="hidden" name="state" value="{{ filters.state }}">
@@ -120,61 +126,7 @@
                                 <input type="hidden" name="month" value="{{ filters.month }}">
                             {% endif %}
 
-                            {# Multi-valued additional filters #}
-                            {% if filters.taxonomy_desc %}
-                                {% if filters.taxonomy_desc.0 %}
-                                    {% for item in filters.taxonomy_desc %}
-                                        <input type="hidden" name="taxonomy_desc" value="{{ item }}">
-                                    {% endfor %}
-                                {% else %}
-                                    <input type="hidden" name="taxonomy_desc" value="{{ filters.taxonomy_desc }}">
-                                {% endif %}
-                            {% endif %}
-                            {% if filters.proc_class %}
-                                {% if filters.proc_class.0 %}
-                                    {% for item in filters.proc_class %}
-                                        <input type="hidden" name="proc_class" value="{{ item }}">
-                                    {% endfor %}
-                                {% else %}
-                                    <input type="hidden" name="proc_class" value="{{ filters.proc_class }}">
-                                {% endif %}
-                            {% endif %}
-                            {% if filters.proc_group %}
-                                {% if filters.proc_group.0 %}
-                                    {% for item in filters.proc_group %}
-                                        <input type="hidden" name="proc_group" value="{{ item }}">
-                                    {% endfor %}
-                                {% else %}
-                                    <input type="hidden" name="proc_group" value="{{ filters.proc_group }}">
-                                {% endif %}
-                            {% endif %}
-                            {% if filters.code %}
-                                {% if filters.code.0 %}
-                                    {% for item in filters.code %}
-                                        <input type="hidden" name="code" value="{{ item }}">
-                                    {% endfor %}
-                                {% else %}
-                                    <input type="hidden" name="code" value="{{ filters.code }}">
-                                {% endif %}
-                            {% endif %}
-                            {% if filters.county_name %}
-                                {% if filters.county_name.0 %}
-                                    {% for item in filters.county_name %}
-                                        <input type="hidden" name="county_name" value="{{ item }}">
-                                    {% endfor %}
-                                {% else %}
-                                    <input type="hidden" name="county_name" value="{{ filters.county_name }}">
-                                {% endif %}
-                            {% endif %}
-                            {% if filters.stat_area_name %}
-                                {% if filters.stat_area_name.0 %}
-                                    {% for item in filters.stat_area_name %}
-                                        <input type="hidden" name="stat_area_name" value="{{ item }}">
-                                    {% endfor %}
-                                {% else %}
-                                    <input type="hidden" name="stat_area_name" value="{{ filters.stat_area_name }}">
-                                {% endif %}
-                            {% endif %}
+                            {# Additional filters are handled by JavaScript, not preserved here to avoid duplicates #}
                             
                             <!-- Filter Instructions -->
                             <div class="alert alert-info mb-4">
@@ -341,6 +293,13 @@
                             <i class="fas fa-check"></i> Apply Filters
                         </button>
                     </div>
+                    <!-- Loading indicator -->
+                    <div id="filterLoading" class="text-center p-3" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Applying filters to dataset...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -506,7 +465,7 @@
                                 <h5 class="card-title mb-0">Key Metrics Analysis</h5>
                             </div>
                             <div class="card-body">
-                                <div class="row">
+                                <div class="row key-metrics-container">
                                     {% for metric_name, metric_data in analysis.key_metrics.items %}
                                         {% if not metric_data.error %}
                                             <div class="col-lg-6 mb-4">
@@ -1434,7 +1393,7 @@ function clearFilter(filterName) {
 // Function to clear all filters
 function clearAllFilters() {
     if (confirm('Are you sure you want to clear all additional filters?')) {
-        const filterNames = ['taxonomy_desc', 'proc_class', 'proc_group', 'code', 'county_name', 'stat_area_name', 'payer_slug'];
+        const filterNames = ['taxonomy_desc', 'proc_class', 'proc_group', 'code', 'county_name', 'stat_area_name'];
         
         filterNames.forEach(filterName => {
             const inputElement = document.getElementById(filterName);
@@ -1461,37 +1420,369 @@ function clearAllFilters() {
 // Function to submit filters with proper multiple value handling
 function submitFilters() {
     const form = document.getElementById('additionalFiltersForm');
-    const filterNames = ['taxonomy_desc', 'proc_class', 'proc_group', 'code', 'county_name', 'stat_area_name', 'payer_slug'];
+    const filterNames = ['payer_slug', 'taxonomy_desc', 'proc_class', 'proc_group', 'code', 'county_name', 'stat_area_name'];
     
-    // Remove any existing hidden inputs for these filters
-    filterNames.forEach(filterName => {
-        const existingInputs = form.querySelectorAll(`input[name="${filterName}"]`);
-        existingInputs.forEach(input => {
-            if (input.type === 'hidden') {
-                input.remove();
-            }
-        });
+    // Build URL parameters manually to avoid duplicates
+    const params = new URLSearchParams();
+    
+    // First, add the basic filters that are always preserved
+    const basicFilters = ['state', 'billing_class', 'procedure_set', 'year', 'month'];
+    basicFilters.forEach(filterName => {
+        const input = form.querySelector(`input[name="${filterName}"]`);
+        if (input && input.value) {
+            params.append(filterName, input.value);
+        }
     });
     
-    // Process each filter input
+    // Then, add the multi-value filters
     filterNames.forEach(filterName => {
         const inputElement = document.getElementById(filterName);
         if (inputElement && inputElement.value.trim()) {
             const values = inputElement.value.split(',').map(v => v.trim()).filter(v => v);
-            
-            // Create hidden inputs for each value
             values.forEach(value => {
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = filterName;
-                hiddenInput.value = value;
-                form.appendChild(hiddenInput);
+                params.append(filterName, value);
             });
         }
     });
     
-    // Submit the form
-    form.submit();
+    // Use AJAX to call the new filtered endpoint instead of page reload
+    submitFiltersAjax(params);
+}
+
+// New AJAX function to handle filtering without page reload
+function submitFiltersAjax(params) {
+    // Show loading state
+    const loadingDiv = document.getElementById('filterLoading');
+    if (loadingDiv) {
+        loadingDiv.style.display = 'block';
+    }
+    
+    // Disable the submit button
+    const submitBtn = document.querySelector('#addFiltersModal .btn-primary');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying Filters...';
+    }
+    
+    // Make AJAX request to the filtered endpoint
+    const url = `${window.location.pathname}filtered/?${params.toString()}`;
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.has_data) {
+                // Update the page content with filtered results
+                updatePageWithFilteredData(data);
+                
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addFiltersModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                
+                // Show success message
+                showNotification('Filters applied successfully!', 'success');
+            } else {
+                showNotification(data.error || 'No data found for the selected filters', 'warning');
+            }
+        })
+        .catch(error => {
+            console.error('Error applying filters:', error);
+            showNotification('Error applying filters. Please try again.', 'error');
+        })
+        .finally(() => {
+            // Hide loading state
+            if (loadingDiv) {
+                loadingDiv.style.display = 'none';
+            }
+            
+            // Re-enable submit button
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-filter"></i> Apply Filters';
+            }
+        });
+}
+
+// Function to update page content with filtered data
+function updatePageWithFilteredData(data) {
+    // Update analysis section
+    if (data.analysis) {
+        updateAnalysisSection(data.analysis);
+    }
+    
+    // Update sample data section
+    if (data.sample_data) {
+        updateSampleDataSection(data.sample_data);
+    }
+    
+    // Update available filters for future filtering
+    if (data.available_filters) {
+        updateAvailableFilters(data.available_filters);
+    }
+    
+    // Update dataset info
+    if (data.combined_df_info) {
+        updateDatasetInfo(data.combined_df_info);
+    }
+}
+
+// Helper function to update analysis section
+function updateAnalysisSection(analysis) {
+    // Update dataset summary
+    const summaryDiv = document.querySelector('.dataset-summary');
+    if (summaryDiv && analysis.dataset_summary) {
+        const summary = analysis.dataset_summary;
+        summaryDiv.innerHTML = `
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">${summary.total_rows.toLocaleString()}</h5>
+                            <p class="card-text">Filtered Rows</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-info">${summary.original_rows.toLocaleString()}</h5>
+                            <p class="card-text">Original Rows</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-warning">${summary.rows_filtered.toLocaleString()}</h5>
+                            <p class="card-text">Rows Filtered Out</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title text-success">${((summary.total_rows / summary.original_rows) * 100).toFixed(1)}%</h5>
+                            <p class="card-text">Data Retained</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Update basic stats
+    if (analysis.basic_stats) {
+        updateBasicStatsSection(analysis.basic_stats);
+    }
+    
+    // Update key metrics
+    if (analysis.key_metrics) {
+        updateKeyMetricsSection(analysis.key_metrics);
+    }
+}
+
+// Helper function to update basic stats section
+function updateBasicStatsSection(basicStats) {
+    const statsContainer = document.querySelector('.basic-stats-container');
+    if (statsContainer) {
+        let statsHtml = '<div class="row">';
+        
+        Object.keys(basicStats).forEach(column => {
+            const stats = basicStats[column];
+            if (stats.type === 'categorical') {
+                statsHtml += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">${column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h6>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Unique Values:</strong> ${stats.unique_count}</p>
+                                <p><strong>Sample Values:</strong></p>
+                                <div class="d-flex flex-wrap">
+                                    ${stats.sample_values.slice(0, 5).map(val => `<span class="badge bg-secondary me-1 mb-1">${val}</span>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (stats.type === 'numeric') {
+                statsHtml += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">${column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h6>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Count:</strong> ${stats.count.toLocaleString()}</p>
+                                <p><strong>Mean:</strong> ${stats.mean ? stats.mean.toLocaleString() : 'N/A'}</p>
+                                <p><strong>Min:</strong> ${stats.min ? stats.min.toLocaleString() : 'N/A'}</p>
+                                <p><strong>Max:</strong> ${stats.max ? stats.max.toLocaleString() : 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        statsHtml += '</div>';
+        statsContainer.innerHTML = statsHtml;
+    }
+}
+
+// Helper function to update sample data section
+function updateSampleDataSection(sampleData) {
+    const sampleTable = document.querySelector('#sampleDataTable tbody');
+    if (sampleTable) {
+        sampleTable.innerHTML = '';
+        
+        sampleData.slice(0, 10).forEach(row => {
+            const tr = document.createElement('tr');
+            // Add key columns to the row
+            const keyColumns = ['organization_name', 'primary_taxonomy_desc', 'code', 'negotiated_rate', 'state'];
+            keyColumns.forEach(col => {
+                const td = document.createElement('td');
+                td.textContent = row[col] || '-';
+                tr.appendChild(td);
+            });
+            sampleTable.appendChild(tr);
+        });
+    }
+}
+
+// Helper function to update key metrics section
+function updateKeyMetricsSection(keyMetrics) {
+    const keyMetricsContainer = document.querySelector('.key-metrics-container');
+    if (keyMetricsContainer) {
+        let keyMetricsHtml = '<div class="row">';
+        
+        // Prioritize procedure-related metrics
+        const procedureMetrics = ['proc_class', 'proc_group', 'code'];
+        const otherMetrics = Object.keys(keyMetrics).filter(key => !procedureMetrics.includes(key));
+        const orderedMetrics = [...procedureMetrics.filter(key => keyMetrics[key]), ...otherMetrics];
+        
+        orderedMetrics.forEach(metricKey => {
+            const metric = keyMetrics[metricKey];
+            if (metric && !metric.error) {
+                const displayName = metricKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                keyMetricsHtml += `
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar me-2"></i>${displayName}
+                                    <span class="badge bg-light text-dark ms-2">${metric.total_unique_values} unique values</span>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                `;
+                
+                if (metric.top_values && metric.top_values.length > 0) {
+                    keyMetricsHtml += `
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Value</th>
+                                        <th>Count</th>
+                                        <th>%</th>
+                                        ${metric.formatting_info ? '<th>Avg Rate</th><th>vs Medicare</th>' : ''}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    metric.top_values.slice(0, 10).forEach(item => {
+                        keyMetricsHtml += `
+                            <tr>
+                                <td><strong>${item.value}</strong></td>
+                                <td>${item.count.toLocaleString()}</td>
+                                <td>${item.percentage}%</td>
+                        `;
+                        
+                        if (metric.formatting_info) {
+                            const avgRate = item.avg_negotiated_rate ? 
+                                `$${item.avg_negotiated_rate.toLocaleString()}` : '-';
+                            const medicarePct = item.avg_negotiated_rate_pct_of_medicare_professional ? 
+                                `${item.avg_negotiated_rate_pct_of_medicare_professional}%` : '-';
+                            
+                            keyMetricsHtml += `
+                                <td>${avgRate}</td>
+                                <td>${medicarePct}</td>
+                            `;
+                        }
+                        
+                        keyMetricsHtml += '</tr>';
+                    });
+                    
+                    keyMetricsHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    keyMetricsHtml += '<p class="text-muted">No data available</p>';
+                }
+                
+                keyMetricsHtml += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        keyMetricsHtml += '</div>';
+        keyMetricsContainer.innerHTML = keyMetricsHtml;
+    }
+}
+
+// Helper function to update available filters
+function updateAvailableFilters(availableFilters) {
+    // Update the data-options attributes for autocomplete inputs
+    Object.keys(availableFilters).forEach(filterKey => {
+        const inputId = filterKey.replace('available_', '');
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.setAttribute('data-options', JSON.stringify(availableFilters[filterKey]));
+        }
+    });
+}
+
+// Helper function to update dataset info
+function updateDatasetInfo(dfInfo) {
+    const shapeInfo = document.querySelector('.dataset-shape-info');
+    if (shapeInfo && dfInfo.shape) {
+        shapeInfo.textContent = `${dfInfo.shape[0].toLocaleString()} rows × ${dfInfo.shape[1]} columns`;
+    }
+}
+
+// Helper function to show notifications
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
 }
 </script>
 {% endblock %}

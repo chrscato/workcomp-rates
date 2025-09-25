@@ -13,6 +13,7 @@ urlpatterns = [
     path('commercial/insights/data-availability-test/', views.data_availability_test, name='data_availability_overview_test'),
     path('commercial/insights/dataset-review/loading/', views.dataset_review_loading, name='dataset_review_loading'),
     path('commercial/insights/dataset-review/map/', views.dataset_review_map, name='dataset_review_map'),
+    path('commercial/insights/dataset-review/filtered/', views.dataset_review_filtered, name='dataset_review_filtered'),
     path('commercial/insights/dataset-review/', views.dataset_review, name='dataset_review'),
     path('debug/filter-options/', views.debug_filter_options, name='debug_filter_options'),
     path('debug/s3-connection/', views.debug_s3_connection, name='debug_s3_connection'),

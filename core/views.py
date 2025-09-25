@@ -1030,8 +1030,8 @@ def dataset_review_map(request):
             db_path='core/data/partition_navigation.db'
         )
         
-        # Get filters from request (preserve multi-selects with getlist)
-        filters = {
+        # Get all filters from request
+        all_filters = {
             # Primary required filters (single values)
             'payer_slug': request.GET.get('payer_slug'),
             'state': request.GET.get('state'),
@@ -1052,24 +1052,18 @@ def dataset_review_map(request):
         }
         
         # Remove empty filters
-        filters = {k: v for k, v in filters.items() if v}
+        all_filters = {k: v for k, v in all_filters.items() if v and (not isinstance(v, list) or len(v) > 0)}
+        
+        # Separate partition-level filters from data-level filters
+        partition_filters = {k: v for k, v in all_filters.items() if k in ['payer_slug', 'state', 'billing_class', 'procedure_set', 'taxonomy_code', 'taxonomy_desc', 'stat_area_name', 'year', 'month']}
+        data_filters = {k: v for k, v in all_filters.items() if k in ['proc_class', 'proc_group', 'code', 'county_name']}
         
         # Validate required filters
-        if not all(filters.get(f) for f in navigator.required_filters):
+        if not all(partition_filters.get(f) for f in navigator.required_filters):
             return render(request, 'core/error.html', {
                 'error_message': 'Please select all required filters: Payer, State, and Billing Class'
             })
         
-        # Build partition filters (only those relevant to partition discovery)
-        partition_filters = {
-            'payer_slug': filters.get('payer_slug'),
-            'state': filters.get('state'),
-            'billing_class': filters.get('billing_class'),
-            'procedure_set': filters.get('procedure_set'),
-            'year': filters.get('year'),
-            'month': filters.get('month'),
-        }
-
         # Search for partitions using only relevant filters
         partitions_df = navigator.search_partitions({k: v for k, v in partition_filters.items() if v})
         
@@ -1095,8 +1089,8 @@ def dataset_review_map(request):
         ]
         
         # Get analysis parameters
-        max_rows = int(request.GET.get('max_rows', 10000))  # Smaller limit for map view
-        max_partitions = int(request.GET.get('max_partitions', 50))  # Smaller limit for map
+        max_rows = int(request.GET.get('max_rows', 10000))          # Smaller limit for map view
+        max_partitions = int(request.GET.get('max_partitions', 200))  # Increased limit for map
         
         # Limit partitions for map view
         if len(s3_paths) > max_partitions:
@@ -1108,6 +1102,52 @@ def dataset_review_map(request):
         if combined_df is None or combined_df.empty:
             return render(request, 'core/error.html', {
                 'error_message': 'Failed to load data from S3 partitions for map view.'
+            })
+        
+        # Apply data-level filters (filters that don't exist in partition metadata)
+        logger.info(f"Applying data-level filters to {len(combined_df)} rows for map view")
+        original_row_count = len(combined_df)
+        
+        # Filter by proc_class
+        if data_filters.get('proc_class'):
+            if isinstance(data_filters['proc_class'], list):
+                combined_df = combined_df[combined_df['proc_class'].isin(data_filters['proc_class'])]
+            else:
+                combined_df = combined_df[combined_df['proc_class'] == data_filters['proc_class']]
+            logger.info(f"After proc_class filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Filter by proc_group
+        if data_filters.get('proc_group'):
+            if isinstance(data_filters['proc_group'], list):
+                combined_df = combined_df[combined_df['proc_group'].isin(data_filters['proc_group'])]
+            else:
+                combined_df = combined_df[combined_df['proc_group'] == data_filters['proc_group']]
+            logger.info(f"After proc_group filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Filter by code
+        if data_filters.get('code'):
+            if isinstance(data_filters['code'], list):
+                combined_df = combined_df[combined_df['code'].isin(data_filters['code'])]
+            else:
+                combined_df = combined_df[combined_df['code'] == data_filters['code']]
+            logger.info(f"After code filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Filter by county_name
+        if data_filters.get('county_name'):
+            if isinstance(data_filters['county_name'], list):
+                combined_df = combined_df[combined_df['county_name'].isin(data_filters['county_name'])]
+            else:
+                combined_df = combined_df[combined_df['county_name'] == data_filters['county_name']]
+            logger.info(f"After county_name filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Check if any data remains after filtering
+        if combined_df.empty:
+            return render(request, 'core/error.html', {
+                'error_message': 'No data available with the selected filters for map view. Please try different filter combinations.'
             })
         
         # Get sample data for map (all data with coordinates)
@@ -1146,7 +1186,7 @@ def dataset_review_map(request):
         import json
         from django.utils.safestring import mark_safe
         context = {
-            'filters': filters,
+            'filters': all_filters,
             'partitions_df': partitions_df,
             'combined_df_info': {
                 'shape': combined_df.shape,
@@ -1198,21 +1238,36 @@ def dataset_review(request):
             db_path='core/data/partition_navigation.db'
         )
         
-        # Get filters from request
-        filters = {
+        # Get all filters from request
+        all_filters = {
             'payer_slug': request.GET.getlist('payer_slug'),
             'state': request.GET.get('state'),
             'billing_class': request.GET.get('billing_class'),
             'procedure_set': request.GET.get('procedure_set'),
             'taxonomy_code': request.GET.get('taxonomy_code'),
-            'taxonomy_desc': request.GET.get('taxonomy_desc'),
-            'stat_area_name': request.GET.get('stat_area_name'),
+            # Additional analysis filters (may be multi-valued)
+            'taxonomy_desc': request.GET.getlist('taxonomy_desc') or request.GET.get('taxonomy_desc'),
+            'stat_area_name': request.GET.getlist('stat_area_name') or request.GET.get('stat_area_name'),
+            'county_name': request.GET.getlist('county_name') or request.GET.get('county_name'),
+            'proc_class': request.GET.getlist('proc_class') or request.GET.get('proc_class'),
+            'proc_group': request.GET.getlist('proc_group') or request.GET.get('proc_group'),
+            'code': request.GET.getlist('code') or request.GET.get('code'),
             'year': request.GET.get('year'),
             'month': request.GET.get('month')
         }
         
         # Remove empty filters
-        filters = {k: v for k, v in filters.items() if v}
+        all_filters = {k: v for k, v in all_filters.items() if v and (not isinstance(v, list) or len(v) > 0)}
+        
+        # Separate partition-level filters from data-level filters
+        partition_filters = {k: v for k, v in all_filters.items() if k in ['payer_slug', 'state', 'billing_class', 'procedure_set', 'taxonomy_code', 'taxonomy_desc', 'stat_area_name', 'year', 'month']}
+        data_filters = {k: v for k, v in all_filters.items() if k in ['proc_class', 'proc_group', 'code', 'county_name']}
+        
+        # Use partition_filters for partition search
+        filters = partition_filters
+        
+        # Remove empty filters
+        filters = {k: v for k, v in filters.items() if v and (not isinstance(v, list) or len(v) > 0)}
         
         # Validate required filters
         if not all(filters.get(f) for f in navigator.required_filters):
@@ -1228,7 +1283,7 @@ def dataset_review(request):
             from django.contrib import messages
             messages.warning(request, 'No data available with the selected filters. Please try different filter combinations.')
             context = {
-                'filters': filters,
+                'filters': all_filters,
                 'partitions_df': pd.DataFrame(),
                 'combined_df_info': {},
                 'analysis': {},
@@ -1252,8 +1307,8 @@ def dataset_review(request):
         s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
         
         # Get analysis parameters
-        max_rows = int(request.GET.get('max_rows', 50000))  # Default to 50k rows
-        max_partitions = int(request.GET.get('max_partitions', 100))  # Default to 100 partitions max
+        max_rows = int(request.GET.get('max_rows', 100000))  # Default to 100k rows
+        max_partitions = int(request.GET.get('max_partitions', 500))  # Default to 500 partitions max
         analysis_type = request.GET.get('analysis_type', 'comprehensive')
         
         # Limit partitions to prevent timeouts
@@ -1282,6 +1337,52 @@ def dataset_review(request):
         if combined_df is None or combined_df.empty:
             return render(request, 'core/error.html', {
                 'error_message': 'Failed to load data from S3 partitions. Please check your AWS credentials and network connection.'
+            })
+        
+        # Apply data-level filters (filters that don't exist in partition metadata)
+        logger.info(f"Applying data-level filters to {len(combined_df)} rows")
+        original_row_count = len(combined_df)
+        
+        # Filter by proc_class
+        if data_filters.get('proc_class'):
+            if isinstance(data_filters['proc_class'], list):
+                combined_df = combined_df[combined_df['proc_class'].isin(data_filters['proc_class'])]
+            else:
+                combined_df = combined_df[combined_df['proc_class'] == data_filters['proc_class']]
+            logger.info(f"After proc_class filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Filter by proc_group
+        if data_filters.get('proc_group'):
+            if isinstance(data_filters['proc_group'], list):
+                combined_df = combined_df[combined_df['proc_group'].isin(data_filters['proc_group'])]
+            else:
+                combined_df = combined_df[combined_df['proc_group'] == data_filters['proc_group']]
+            logger.info(f"After proc_group filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Filter by code
+        if data_filters.get('code'):
+            if isinstance(data_filters['code'], list):
+                combined_df = combined_df[combined_df['code'].isin(data_filters['code'])]
+            else:
+                combined_df = combined_df[combined_df['code'] == data_filters['code']]
+            logger.info(f"After code filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Filter by county_name
+        if data_filters.get('county_name'):
+            if isinstance(data_filters['county_name'], list):
+                combined_df = combined_df[combined_df['county_name'].isin(data_filters['county_name'])]
+            else:
+                combined_df = combined_df[combined_df['county_name'] == data_filters['county_name']]
+            logger.info(f"After county_name filter: {len(combined_df)} rows (removed {original_row_count - len(combined_df)})")
+            original_row_count = len(combined_df)
+        
+        # Check if any data remains after filtering
+        if combined_df.empty:
+            return render(request, 'core/error.html', {
+                'error_message': 'No data available with the selected filters. Please try different filter combinations.'
             })
         
         # Perform simple analysis first
@@ -1332,7 +1433,8 @@ def dataset_review(request):
         
         key_metric_columns = [
             'stat_area_name', 'tin_value', 'county_name', 
-            'primary_taxonomy_desc', 'enumeration_type', 'organization_name'
+            'primary_taxonomy_desc', 'enumeration_type', 'organization_name',
+            'proc_class', 'proc_group', 'code'
         ]
         
         for col in key_metric_columns:
@@ -1579,14 +1681,15 @@ def dataset_review(request):
         if combined_df is not None and not combined_df.empty:
             try:
                 import json
+                # Increase limits for filter options since we have more data now
                 available_filters = {
-                    'available_taxonomy_descs': json.dumps(sorted(combined_df['primary_taxonomy_desc'].dropna().unique().tolist())[:100]),
-                    'available_proc_classes': json.dumps(sorted(combined_df['proc_class'].dropna().unique().tolist())[:100]),
-                    'available_proc_groups': json.dumps(sorted(combined_df['proc_group'].dropna().unique().tolist())[:100]),
-                    'available_codes': json.dumps(sorted(combined_df['code'].dropna().unique().tolist())[:100]),
-                    'available_county_names': json.dumps(sorted(combined_df['county_name'].dropna().unique().tolist())[:100]),
-                    'available_stat_area_names': json.dumps(sorted(combined_df['stat_area_name'].dropna().unique().tolist())[:100]),
-                    'available_payer_slugs': json.dumps(sorted(combined_df['payer_slug'].dropna().unique().tolist())[:100])
+                    'available_taxonomy_descs': json.dumps(sorted(combined_df['primary_taxonomy_desc'].dropna().unique().tolist())[:500]),
+                    'available_proc_classes': json.dumps(sorted(combined_df['proc_class'].dropna().unique().tolist())[:500]),
+                    'available_proc_groups': json.dumps(sorted(combined_df['proc_group'].dropna().unique().tolist())[:500]),
+                    'available_codes': json.dumps(sorted(combined_df['code'].dropna().unique().tolist())[:500]),
+                    'available_county_names': json.dumps(sorted(combined_df['county_name'].dropna().unique().tolist())[:500]),
+                    'available_stat_area_names': json.dumps(sorted(combined_df['stat_area_name'].dropna().unique().tolist())[:500]),
+                    'available_payer_slugs': json.dumps(sorted(combined_df['payer_slug'].dropna().unique().tolist())[:500])
                 }
             except Exception as e:
                 logger.warning(f"Could not get available filter options: {e}")
@@ -1602,7 +1705,7 @@ def dataset_review(request):
 
         # Prepare context
         context = {
-            'filters': filters,
+            'filters': all_filters,
             'partitions_df': partitions_df,
             'combined_df_info': {
                 'shape': combined_df.shape,
@@ -1630,7 +1733,7 @@ def dataset_review(request):
             'combined_df_info': {},
             'analysis': {},
             'sample_data': [],
-            'max_rows': 50000,
+            'max_rows': 100000,
             'analysis_type': 'comprehensive',
             'has_data': False,
             'error_message': 'An error occurred while analyzing the dataset.',
@@ -1639,6 +1742,307 @@ def dataset_review(request):
         }
     
     return render(request, 'core/dataset_review.html', context)
+
+
+@login_required
+def dataset_review_filtered(request):
+    """
+    API endpoint for client-side filtering on the existing combined DataFrame
+    This avoids regenerating partitions and works with the data already in memory
+    """
+    import json
+    
+    try:
+        import pandas as pd
+        
+        # Get all filters from request (same as original dataset_review)
+        all_filters = {
+            'payer_slug': request.GET.getlist('payer_slug'),
+            'state': request.GET.get('state'),
+            'billing_class': request.GET.get('billing_class'),
+            'procedure_set': request.GET.get('procedure_set'),
+            'taxonomy_code': request.GET.get('taxonomy_code'),
+            # Additional analysis filters (may be multi-valued)
+            'taxonomy_desc': request.GET.getlist('taxonomy_desc') or request.GET.get('taxonomy_desc'),
+            'stat_area_name': request.GET.getlist('stat_area_name') or request.GET.get('stat_area_name'),
+            'county_name': request.GET.getlist('county_name') or request.GET.get('county_name'),
+            'proc_class': request.GET.getlist('proc_class') or request.GET.get('proc_class'),
+            'proc_group': request.GET.getlist('proc_group') or request.GET.get('proc_group'),
+            'code': request.GET.getlist('code') or request.GET.get('code'),
+            'year': request.GET.get('year'),
+            'month': request.GET.get('month')
+        }
+        
+        # Remove empty filters
+        all_filters = {k: v for k, v in all_filters.items() if v and (not isinstance(v, list) or len(v) > 0)}
+        
+        # Separate partition-level filters from data-level filters (same as original)
+        partition_filters = {k: v for k, v in all_filters.items() if k in ['payer_slug', 'state', 'billing_class', 'procedure_set', 'taxonomy_code', 'taxonomy_desc', 'stat_area_name', 'year', 'month']}
+        data_filters = {k: v for k, v in all_filters.items() if k in ['proc_class', 'proc_group', 'code', 'county_name']}
+        
+        # Initialize partition navigator
+        navigator = PartitionNavigator(
+            db_path='core/data/partition_navigation.db'
+        )
+        
+        # Get partitions based on partition-level filters
+        partitions_df = navigator.search_partitions(partition_filters)
+        
+        if partitions_df.empty:
+            return JsonResponse({
+                'error': 'No partitions found for the given filters',
+                'has_data': False
+            })
+        
+        # Get S3 paths for combination
+        s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
+        
+        # Get analysis parameters
+        max_rows = int(request.GET.get('max_rows', 100000))
+        max_partitions = int(request.GET.get('max_partitions', 500))
+        
+        # Limit partitions
+        if len(s3_paths) > max_partitions:
+            s3_paths = s3_paths[:max_partitions]
+        
+        # Combine partitions
+        combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows)
+        
+        if combined_df is None or combined_df.empty:
+            return JsonResponse({
+                'error': 'Failed to load data from partitions',
+                'has_data': False
+            })
+        
+        # Apply client-side filters to the existing DataFrame
+        original_count = len(combined_df)
+        filtered_df = combined_df.copy()
+        
+        # Apply data-level filters to the existing DataFrame
+        for filter_name, filter_values in data_filters.items():
+            if filter_values and filter_name in filtered_df.columns:
+                if isinstance(filter_values, list):
+                    filtered_df = filtered_df[filtered_df[filter_name].isin(filter_values)]
+                else:
+                    filtered_df = filtered_df[filtered_df[filter_name] == filter_values]
+        
+        # Generate analysis for filtered data
+        analysis = {
+            'dataset_summary': {
+                'total_rows': len(filtered_df),
+                'original_rows': original_count,
+                'rows_filtered': original_count - len(filtered_df)
+            },
+            'basic_stats': {},
+            'key_metrics': {}
+        }
+        
+        # Basic stats for key columns
+        key_columns = ['state', 'payer_slug', 'billing_class', 'negotiated_rate', 'organization_name', 'primary_taxonomy_desc']
+        for col in key_columns:
+            if col in filtered_df.columns:
+                try:
+                    if filtered_df[col].dtype == 'object':
+                        unique_vals = filtered_df[col].dropna().unique()[:10]
+                        analysis['basic_stats'][col] = {
+                            'type': 'categorical',
+                            'unique_count': len(filtered_df[col].dropna().unique()),
+                            'sample_values': list(unique_vals)
+                        }
+                    else:
+                        analysis['basic_stats'][col] = {
+                            'type': 'numeric',
+                            'count': filtered_df[col].count(),
+                            'mean': round(filtered_df[col].mean(), 2) if filtered_df[col].dtype in ['int64', 'float64'] else None,
+                            'min': filtered_df[col].min() if filtered_df[col].dtype in ['int64', 'float64'] else None,
+                            'max': filtered_df[col].max() if filtered_df[col].dtype in ['int64', 'float64'] else None
+                        }
+                except Exception as e:
+                    analysis['basic_stats'][col] = {'error': str(e)}
+        
+        # Add comprehensive key metrics analysis (same as main dataset_review)
+        key_metric_columns = [
+            'stat_area_name', 'tin_value', 'county_name', 
+            'primary_taxonomy_desc', 'enumeration_type', 'organization_name',
+            'proc_class', 'proc_group', 'code'
+        ]
+        
+        for col in key_metric_columns:
+            if col in filtered_df.columns:
+                try:
+                    # Get unique values and their counts
+                    value_counts = filtered_df[col].value_counts().head(20)
+                    
+                    metrics_data = []
+                    for value, count in value_counts.items():
+                        # Filter data for this specific value
+                        value_data = filtered_df[filtered_df[col] == value]
+                        
+                        if len(value_data) > 0:
+                            metric_item = {
+                                'value': str(value),
+                                'count': int(count),
+                                'percentage': round((count / len(filtered_df)) * 100, 2)
+                            }
+                            
+                            # Add financial metrics if negotiated_rate exists
+                            if 'negotiated_rate' in filtered_df.columns:
+                                rates = value_data['negotiated_rate'].dropna()
+                                if len(rates) > 0:
+                                    metric_item['avg_negotiated_rate'] = round(rates.mean(), 2)
+                                    metric_item['median_negotiated_rate'] = round(rates.median(), 2)
+                                    metric_item['min_negotiated_rate'] = round(rates.min(), 2)
+                                    metric_item['max_negotiated_rate'] = round(rates.max(), 2)
+                            
+                            # Add Medicare benchmark comparisons if available
+                            if 'medicare_professional_rate' in filtered_df.columns:
+                                prof_rates = value_data['medicare_professional_rate'].dropna()
+                                if len(prof_rates) > 0:
+                                    metric_item['avg_medicare_professional_rate'] = round(prof_rates.mean(), 2)
+                                    
+                                    # Calculate percentage of Medicare
+                                    if 'avg_negotiated_rate' in metric_item:
+                                        prof_pct = (metric_item['avg_negotiated_rate'] / prof_rates.mean()) * 100
+                                        metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct, 2)
+                            
+                            if 'medicare_asc_stateavg' in filtered_df.columns:
+                                asc_rates = value_data['medicare_asc_stateavg'].dropna()
+                                if len(asc_rates) > 0:
+                                    metric_item['avg_medicare_asc_stateavg'] = round(asc_rates.mean(), 2)
+                                    
+                                    if 'avg_negotiated_rate' in metric_item:
+                                        asc_pct = (metric_item['avg_negotiated_rate'] / asc_rates.mean()) * 100
+                                        metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct, 2)
+                            
+                            if 'medicare_opps_stateavg' in filtered_df.columns:
+                                opps_rates = value_data['medicare_opps_stateavg'].dropna()
+                                if len(opps_rates) > 0:
+                                    metric_item['avg_medicare_opps_stateavg'] = round(opps_rates.mean(), 2)
+                                    
+                                    if 'avg_negotiated_rate' in metric_item:
+                                        opps_pct = (metric_item['avg_negotiated_rate'] / opps_rates.mean()) * 100
+                                        metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct, 2)
+                            
+                            metrics_data.append(metric_item)
+                    
+                    # Add formatting flags for frontend
+                    key_metrics_info = {
+                        'total_unique_values': len(filtered_df[col].dropna().unique()),
+                        'top_values': metrics_data[:10]  # Top 10 for display
+                    }
+                    
+                    # Add formatting information for frontend
+                    formatting_info = {
+                        'avg_negotiated_rate': {'currency_format': True},
+                        'avg_medicare_professional_rate': {'currency_format': True},
+                        'avg_medicare_asc_stateavg': {'currency_format': True},
+                        'avg_medicare_opps_stateavg': {'currency_format': True},
+                        'avg_negotiated_rate_pct_of_medicare_professional': {'percentage_format': True},
+                        'avg_negotiated_rate_pct_of_medicare_asc': {'percentage_format': True},
+                        'avg_negotiated_rate_pct_of_medicare_opps': {'percentage_format': True}
+                    }
+                    
+                    key_metrics_info['formatting_info'] = formatting_info
+                    
+                    analysis['key_metrics'][col] = key_metrics_info
+                    
+                except Exception as e:
+                    logger.warning(f"Could not analyze key metric {col}: {e}")
+                    analysis['key_metrics'][col] = {'error': str(e)}
+        
+        # Sample data (handle NaN values)
+        if not filtered_df.empty:
+            # Replace NaN values with None for JSON serialization
+            sample_df = filtered_df.head(100).copy()
+            sample_df = sample_df.where(pd.notnull(sample_df), None)
+            sample_data = sample_df.to_dict('records')
+        else:
+            sample_data = []
+        
+        # Get updated available filter options from filtered data
+        available_filters = {}
+        if not filtered_df.empty:
+            available_filters = {
+                'available_taxonomy_descs': sorted(filtered_df['primary_taxonomy_desc'].dropna().unique().tolist())[:500],
+                'available_proc_classes': sorted(filtered_df['proc_class'].dropna().unique().tolist())[:500],
+                'available_proc_groups': sorted(filtered_df['proc_group'].dropna().unique().tolist())[:500],
+                'available_codes': sorted(filtered_df['code'].dropna().unique().tolist())[:500],
+                'available_county_names': sorted(filtered_df['county_name'].dropna().unique().tolist())[:500],
+                'available_stat_area_names': sorted(filtered_df['stat_area_name'].dropna().unique().tolist())[:500],
+                'available_payer_slugs': sorted(filtered_df['payer_slug'].dropna().unique().tolist())[:500]
+            }
+        
+        # Convert numpy types to Python types for JSON serialization
+        def convert_numpy_types(obj):
+            import numpy as np
+            import math
+            
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                # Handle NaN and infinity values
+                if np.isnan(obj) or math.isnan(obj):
+                    return None
+                elif np.isinf(obj) or math.isinf(obj):
+                    return None
+                else:
+                    return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif hasattr(obj, 'item'):  # numpy scalar
+                result = obj.item()
+                # Handle NaN values from .item()
+                if isinstance(result, float) and (np.isnan(result) or math.isnan(result)):
+                    return None
+                return result
+            elif isinstance(obj, dict):
+                return {k: convert_numpy_types(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            elif isinstance(obj, float):
+                # Handle regular Python float NaN values
+                if math.isnan(obj):
+                    return None
+            return obj
+        
+        # Convert sample data to ensure JSON serialization
+        sample_data_serializable = []
+        for record in sample_data:
+            sample_data_serializable.append(convert_numpy_types(record))
+        
+        # Convert analysis data
+        analysis_serializable = convert_numpy_types(analysis)
+        available_filters_serializable = convert_numpy_types(available_filters)
+        
+        # Use Django's JSONResponse with custom encoder to handle NaN values
+        from django.core.serializers.json import DjangoJSONEncoder
+        
+        class NaNHandlingJSONEncoder(DjangoJSONEncoder):
+            def encode(self, obj):
+                # Convert NaN values to None before encoding
+                if isinstance(obj, float) and (obj != obj):  # NaN check
+                    return None
+                return super().encode(obj)
+        
+        return JsonResponse({
+            'has_data': True,
+            'analysis': analysis_serializable,
+            'sample_data': sample_data_serializable,
+            'available_filters': available_filters_serializable,
+            'combined_df_info': {
+                'shape': [int(filtered_df.shape[0]), int(filtered_df.shape[1])],
+                'columns': list(filtered_df.columns)
+            }
+        }, encoder=NaNHandlingJSONEncoder)
+        
+    except Exception as e:
+        logger.error(f"Error in dataset_review_filtered: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return JsonResponse({
+            'error': str(e),
+            'has_data': False
+        })
 
 
 @login_required

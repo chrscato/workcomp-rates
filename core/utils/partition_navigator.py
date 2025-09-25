@@ -225,14 +225,26 @@ class PartitionNavigator:
         # Apply optional filters
         for filter_key in self.optional_filters:
             if filters.get(filter_key):
-                where_conditions.append(f"p.{filter_key} = ?")
-                params.append(filters[filter_key])
+                # Handle multiple values for any filter
+                if isinstance(filters[filter_key], list) and len(filters[filter_key]) > 0:
+                    placeholders = ','.join(['?' for _ in filters[filter_key]])
+                    where_conditions.append(f"p.{filter_key} IN ({placeholders})")
+                    params.extend(filters[filter_key])
+                else:
+                    where_conditions.append(f"p.{filter_key} = ?")
+                    params.append(filters[filter_key])
         
         # Apply temporal filters
         for filter_key in self.temporal_filters:
             if filters.get(filter_key):
-                where_conditions.append(f"p.{filter_key} = ?")
-                params.append(filters[filter_key])
+                # Handle multiple values for any filter
+                if isinstance(filters[filter_key], list) and len(filters[filter_key]) > 0:
+                    placeholders = ','.join(['?' for _ in filters[filter_key]])
+                    where_conditions.append(f"p.{filter_key} IN ({placeholders})")
+                    params.extend(filters[filter_key])
+                else:
+                    where_conditions.append(f"p.{filter_key} = ?")
+                    params.append(filters[filter_key])
         
         where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
         
