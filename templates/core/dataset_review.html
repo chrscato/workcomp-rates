@@ -197,6 +197,9 @@
                             <i class="fas fa-arrow-left"></i> Back to Selection
                         </a>
                         {% if has_data %}
+                            <a href="{% url 'dataset_review_map' %}?{{ request.GET.urlencode }}" class="btn btn-info">
+                                <i class="fas fa-map"></i> View Map
+                            </a>
                             <button class="btn btn-success" onclick="exportFilteredData()">
                                 <i class="fas fa-download"></i> Export Data
                             </button>
@@ -270,7 +273,7 @@
                                                         </div>
                                                         
                                                         <div class="filter-values">
-                                                            {% if value|length > 1 %}
+                                                            {% if value|is_multiple_values %}
                                                                 {% for item in value %}
                                                                     <span class="filter-badge me-2 mb-2" style="display: inline-block; background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color: white; border-radius: 20px; font-size: 0.8rem; font-weight: 500; padding: 6px 12px; box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3); transition: all 0.2s ease; position: relative;">
                                                                         {{ item|title|replace:"-| " }}
@@ -313,16 +316,6 @@
                                                     </div>
                                                     <div style="font-size: 0.85rem; color: #1565c0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
                                                         Filter Coverage
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="summary-stat">
-                                                    <div style="font-size: 1.8rem; font-weight: 700; color: #1976d2; margin-bottom: 4px;">
-                                                        {% for key, value in filters.items %}{% if value %}{% if value|length > 1 %}{{ value|length }}{% else %}1{% endif %}{% if not forloop.last %}+{% endif %}{% endif %}{% endfor %}
-                                                    </div>
-                                                    <div style="font-size: 0.85rem; color: #1565c0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                                                        Total Values
                                                     </div>
                                                 </div>
                                             </div>
@@ -615,8 +608,8 @@
         </div>
 
         {% if has_data %}
-            <!-- Dataset Summary -->
-            <div class="row mb-4">
+            <!-- Dataset Summary - Hidden until client-side loading -->
+            <div class="row mb-4" id="dataset-summary" style="display: none;">
                 <div class="col-md-12">
                     <div class="card text-center">
                         <div class="card-body">
@@ -629,7 +622,7 @@
 
             <!-- Payer Breakdown Analysis (if multiple payers selected) -->
             {% if analysis.payer_breakdown %}
-            <div class="row mb-4">
+            <div class="row mb-4" id="payer-breakdown" style="display: none;">
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
@@ -760,7 +753,7 @@
 
             <!-- Key Metrics Analysis -->
             {% if analysis.key_metrics %}
-                <div class="row mb-4">
+                <div class="row mb-4" id="key-metrics-analysis" style="display: none;">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header">
@@ -927,7 +920,7 @@
 
             <!-- Payer Comparison Analysis -->
             {% if analysis.payer_comparison and analysis.payer_comparison.payers %}
-                <div class="row mb-4">
+                <div class="row mb-4" id="payer-comparison-analysis" style="display: none;">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header">
@@ -1014,7 +1007,7 @@
 
             <!-- Basic Column Statistics -->
             {% if analysis.basic_stats %}
-                <div class="row mb-4">
+                <div class="row mb-4" id="basic-stats-analysis" style="display: none;">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header">
@@ -1062,8 +1055,23 @@
                 </div>
             {% endif %}
 
+            <!-- Analysis Loading State -->
+            <div class="row" id="analysis-loading">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h5 class="text-primary mb-2">Loading Analysis</h5>
+                            <p class="text-muted">Preparing your dataset analysis...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Analysis Tabs -->
-            <div class="row">
+            <div class="row" id="analysis-section" style="display: none;">
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
@@ -1292,52 +1300,15 @@
                                 <!-- Data Preview Tab -->
                                 <div class="tab-pane fade" id="preview" role="tabpanel">
                                     <h5>Data Preview (First 100 Records)</h5>
-                                    {% if sample_data %}
-                                        <div class="table-responsive">
-                                            <table class="table table-sm table-striped table-hover">
-                                                <thead class="table-dark">
-                                                    <tr>
-                                                        {% for col in combined_df_info.columns %}
-                                                            <th>{{ col|replace:"_| "|title }}</th>
-                                                        {% endfor %}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for record in sample_data %}
-                                                        <tr>
-                                                            {% for key, value in record.items %}
-                                                                <td>
-                                                                    {% if value is None %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% elif key == 'negotiated_rate' and value %}
-                                                                        <span class="text-success fw-bold">${{ value|floatformat:2 }}</span>
-                                                                    {% elif key == 'medicare_professional_rate' and value %}
-                                                                        <span class="text-primary fw-bold">${{ value|floatformat:2 }}</span>
-                                                                    {% elif key == 'medicare_asc_stateavg' and value %}
-                                                                        <span class="text-info fw-bold">${{ value|floatformat:2 }}</span>
-                                                                    {% elif key == 'medicare_opps_stateavg' and value %}
-                                                                        <span class="text-info fw-bold">${{ value|floatformat:2 }}</span>
-                                                                    {% elif key == 'negotiated_rate_pct_of_medicare_professional' and value %}
-                                                                        <span class="text-warning fw-bold">{{ value|floatformat:1 }}%</span>
-                                                                    {% elif key == 'negotiated_rate_pct_of_medicare_asc' and value %}
-                                                                        <span class="text-warning fw-bold">{{ value|floatformat:1 }}%</span>
-                                                                    {% elif key == 'negotiated_rate_pct_of_medicare_opps' and value %}
-                                                                        <span class="text-warning fw-bold">{{ value|floatformat:1 }}%</span>
-                                                                    {% elif key == 'rate' and value %}
-                                                                        ${{ value|floatformat:2 }}
-                                                                    {% else %}
-                                                                        {{ value|truncatechars:50 }}
-                                                                    {% endif %}
-                                                                </td>
-                                                            {% endfor %}
-                                                        </tr>
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
+                                    <div id="preview-content" style="display: none;">
+                                        <!-- Content will be populated by client-side JavaScript -->
+                                    </div>
+                                    <div id="preview-loading" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
                                         </div>
-                                    {% else %}
-                                        <p class="text-muted">No data available for preview.</p>
-                                    {% endif %}
+                                        <p class="mt-2">Loading data preview...</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

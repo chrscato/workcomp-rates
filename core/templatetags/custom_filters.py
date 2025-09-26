@@ -67,3 +67,13 @@ def humanize_field_name(value):
         return value
     # Replace underscores with spaces and title case
     return str(value).replace('_', ' ').title()
+
+@register.filter
+def is_list(value):
+    """Check if value is a list (not a string)"""
+    return isinstance(value, list)
+
+@register.filter
+def is_multiple_values(value):
+    """Check if value is a list with multiple items"""
+    return isinstance(value, list) and len(value) > 1

@@ -457,6 +457,15 @@
                         <strong>Found {{ partition_summary.total_estimated_records|intcomma }} records</strong> matching your search criteria.
                         <p class="mb-0 mt-2">These records are distributed across {{ partition_summary.partition_count }} data partitions.</p>
                     </div>
+                    
+                    <!-- Performance Warning for Large Result Sets -->
+                    {% if partition_summary.total_estimated_records > 100000 %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Performance Notice:</strong> Your search returned over 100,000 records. 
+                        Please consider adding additional filters (such as procedure set, taxonomy, or time period) to improve performance and reduce loading times.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

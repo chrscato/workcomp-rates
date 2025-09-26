@@ -81,6 +81,11 @@ class ClientSideDatasetManager {
         this.isLoading = true;
         this.showLoadingState('Loading dataset...');
         
+        // Set up timeout for large datasets (60 seconds)
+        const timeoutId = setTimeout(() => {
+            this.showTimeoutWarning();
+        }, 60000);
+        
         try {
             // Pass current URL parameters to the data endpoint
             const currentParams = new URLSearchParams(window.location.search);
@@ -88,6 +93,9 @@ class ClientSideDatasetManager {
             
             const response = await fetch(dataUrl);
             const result = await response.json();
+            
+            // Clear timeout if request completes successfully
+            clearTimeout(timeoutId);
             
             if (result.has_data) {
                 this.dataset = result.data;
@@ -110,6 +118,9 @@ class ClientSideDatasetManager {
                 // Update filter options
                 this.updateFilterOptions(result.filter_options);
                 
+                // Hide loading state and show analysis section
+                this.hideAnalysisLoading();
+                
                 // Generate initial analysis
                 this.updateAnalysis();
                 
@@ -119,6 +130,7 @@ class ClientSideDatasetManager {
             }
         } catch (error) {
             console.error('Error loading dataset:', error);
+            clearTimeout(timeoutId);
             this.showNotification('Error loading dataset. Please try again.', 'error');
         } finally {
             this.isLoading = false;
@@ -130,8 +142,23 @@ class ClientSideDatasetManager {
         Object.entries(filterOptions).forEach(([column, options]) => {
             const input = document.getElementById(column);
             if (input) {
+                // Handle both array and string formats
+                let optionsArray;
+                if (Array.isArray(options)) {
+                    optionsArray = options;
+                } else if (typeof options === 'string') {
+                    try {
+                        optionsArray = JSON.parse(options);
+                    } catch (e) {
+                        console.warn(`Failed to parse options for ${column}:`, e);
+                        optionsArray = [];
+                    }
+                } else {
+                    optionsArray = [];
+                }
+                
                 // Update autocomplete options
-                input.setAttribute('data-options', JSON.stringify(options));
+                input.setAttribute('data-options', JSON.stringify(optionsArray));
                 
                 // Create datalist for autocomplete
                 let datalist = input.nextElementSibling;
@@ -144,7 +171,7 @@ class ClientSideDatasetManager {
                 
                 // Update datalist options
                 datalist.innerHTML = '';
-                options.slice(0, 50).forEach(option => {
+                optionsArray.slice(0, 50).forEach(option => {
                     const optionElement = document.createElement('option');
                     optionElement.value = option;
                     datalist.appendChild(optionElement);
@@ -242,8 +269,8 @@ class ClientSideDatasetManager {
         // Update header metrics
         this.updateHeaderMetrics();
         
-        // Update applied filters display
-        this.updateAppliedFiltersDisplay();
+        // Skip updating applied filters display - keep original server-rendered design
+        // this.updateAppliedFiltersDisplay();
         
         console.log('updateAnalysis completed');
     }
@@ -704,8 +731,10 @@ class ClientSideDatasetManager {
     }
     
     updateSampleData() {
-        const previewDiv = document.querySelector('#preview .card-body');
-        if (!previewDiv) return;
+        const previewContentDiv = document.querySelector('#preview-content');
+        const previewLoadingDiv = document.querySelector('#preview-loading');
+        
+        if (!previewContentDiv || !previewLoadingDiv) return;
         
         // Use virtual scrolling for large datasets
         const maxDisplayRows = 50;
@@ -751,7 +780,10 @@ class ClientSideDatasetManager {
             `;
         }
         
-        previewDiv.innerHTML = html;
+        // Hide loading spinner and show content
+        previewLoadingDiv.style.display = 'none';
+        previewContentDiv.innerHTML = html;
+        previewContentDiv.style.display = 'block';
     }
     
     updateHeaderMetrics() {
@@ -930,6 +962,44 @@ class ClientSideDatasetManager {
         }
     }
     
+    hideAnalysisLoading() {
+        const analysisLoadingDiv = document.getElementById('analysis-loading');
+        const analysisSectionDiv = document.getElementById('analysis-section');
+        const datasetSummaryDiv = document.getElementById('dataset-summary');
+        const payerBreakdownDiv = document.getElementById('payer-breakdown');
+        const keyMetricsAnalysisDiv = document.getElementById('key-metrics-analysis');
+        const payerComparisonAnalysisDiv = document.getElementById('payer-comparison-analysis');
+        const basicStatsAnalysisDiv = document.getElementById('basic-stats-analysis');
+        
+        if (analysisLoadingDiv) {
+            analysisLoadingDiv.style.display = 'none';
+        }
+        
+        if (analysisSectionDiv) {
+            analysisSectionDiv.style.display = 'block';
+        }
+        
+        if (datasetSummaryDiv) {
+            datasetSummaryDiv.style.display = 'block';
+        }
+        
+        if (payerBreakdownDiv) {
+            payerBreakdownDiv.style.display = 'block';
+        }
+        
+        if (keyMetricsAnalysisDiv) {
+            keyMetricsAnalysisDiv.style.display = 'block';
+        }
+        
+        if (payerComparisonAnalysisDiv) {
+            payerComparisonAnalysisDiv.style.display = 'block';
+        }
+        
+        if (basicStatsAnalysisDiv) {
+            basicStatsAnalysisDiv.style.display = 'block';
+        }
+    }
+    
     closeModal() {
         const modal = bootstrap.Modal.getInstance(document.getElementById('addFiltersModal'));
         if (modal) {
@@ -962,6 +1032,72 @@ class ClientSideDatasetManager {
                 notification.remove();
             }
         }, 5000);
+    }
+    
+    showTimeoutWarning() {
+        // Hide the loading state
+        this.hideLoadingState();
+        
+        // Hide analysis loading and show analysis section (even if empty)
+        this.hideAnalysisLoading();
+        
+        // Create timeout warning modal
+        const modalHtml = `
+            <div class="modal fade" id="timeoutModal" tabindex="-1" aria-labelledby="timeoutModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning text-dark">
+                            <h5 class="modal-title" id="timeoutModalLabel">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Loading Timeout
+                            </h5>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading">Dataset Loading Taking Too Long</h6>
+                                <p class="mb-0">Your dataset is taking longer than 60 seconds to load. This usually happens with very large datasets that may impact performance.</p>
+                            </div>
+                            <p>Please consider:</p>
+                            <ul>
+                                <li>Adding more specific filters to reduce the dataset size</li>
+                                <li>Selecting a smaller time period</li>
+                                <li>Choosing a specific procedure set or taxonomy</li>
+                            </ul>
+                            <p class="mb-0">Would you like to go back to the selection page to refine your filters?</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                Stay Here
+                            </button>
+                            <a href="/dashboard/" class="btn btn-primary">
+                                <i class="bi bi-arrow-left me-2"></i>Back to Selection
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove any existing timeout modal
+        const existingModal = document.getElementById('timeoutModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add the modal to the page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('timeoutModal'));
+        modal.show();
+        
+        // Clean up when modal is hidden
+        document.getElementById('timeoutModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+        
+        // Reset loading state
+        this.isLoading = false;
     }
 }
 

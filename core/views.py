@@ -1588,24 +1588,24 @@ def dataset_review(request):
                 import json
                 # Increase limits for filter options since we have more data now
                 available_filters = {
-                    'available_taxonomy_descs': json.dumps(sorted(combined_df['primary_taxonomy_desc'].dropna().unique().tolist())[:500]),
-                    'available_proc_classes': json.dumps(sorted(combined_df['proc_class'].dropna().unique().tolist())[:500]),
-                    'available_proc_groups': json.dumps(sorted(combined_df['proc_group'].dropna().unique().tolist())[:500]),
-                    'available_codes': json.dumps(sorted(combined_df['code'].dropna().unique().tolist())[:500]),
-                    'available_county_names': json.dumps(sorted(combined_df['county_name'].dropna().unique().tolist())[:500]),
-                    'available_stat_area_names': json.dumps(sorted(combined_df['stat_area_name'].dropna().unique().tolist())[:500]),
-                    'available_payer_slugs': json.dumps(sorted(combined_df['payer_slug'].dropna().unique().tolist())[:500])
+                    'available_taxonomy_descs': sorted(combined_df['primary_taxonomy_desc'].dropna().unique().tolist())[:500],
+                    'available_proc_classes': sorted(combined_df['proc_class'].dropna().unique().tolist())[:500],
+                    'available_proc_groups': sorted(combined_df['proc_group'].dropna().unique().tolist())[:500],
+                    'available_codes': sorted(combined_df['code'].dropna().unique().tolist())[:500],
+                    'available_county_names': sorted(combined_df['county_name'].dropna().unique().tolist())[:500],
+                    'available_stat_area_names': sorted(combined_df['stat_area_name'].dropna().unique().tolist())[:500],
+                    'available_payer_slugs': sorted(combined_df['payer_slug'].dropna().unique().tolist())[:500]
                 }
             except Exception as e:
                 logger.warning(f"Could not get available filter options: {e}")
                 available_filters = {
-                    'available_taxonomy_descs': '[]',
-                    'available_proc_classes': '[]',
-                    'available_proc_groups': '[]',
-                    'available_codes': '[]',
-                    'available_county_names': '[]',
-                    'available_stat_area_names': '[]',
-                    'available_payer_slugs': '[]'
+                    'available_taxonomy_descs': [],
+                    'available_proc_classes': [],
+                    'available_proc_groups': [],
+                    'available_codes': [],
+                    'available_county_names': [],
+                    'available_stat_area_names': [],
+                    'available_payer_slugs': []
                 }
 
         # Prepare context
