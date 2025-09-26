@@ -1,0 +1,633 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}TIN and Provider Lookup - WorkComp Rates{% endblock %}
+
+{% block extra_head %}
+<style>
+    .search-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+    }
+    
+    .search-tabs {
+        border-bottom: 2px solid rgba(255,255,255,0.2);
+        margin-bottom: 1.5rem;
+    }
+    
+    .search-tab {
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.7);
+        padding: 0.75rem 1.5rem;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s ease;
+    }
+    
+    .search-tab.active {
+        color: white;
+        border-bottom-color: #ffd700;
+    }
+    
+    .search-tab:hover {
+        color: white;
+        background: rgba(255,255,255,0.1);
+    }
+    
+    .form-control {
+        border-radius: 10px;
+        border: 2px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.9);
+        padding: 0.75rem 1rem;
+        font-size: 1.1rem;
+    }
+    
+    .form-control:focus {
+        border-color: #ffd700;
+        box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.25);
+        background: white;
+    }
+    
+    .btn-search {
+        background: linear-gradient(45deg, #ffd700, #ffed4e);
+        border: none;
+        color: #333;
+        font-weight: bold;
+        padding: 0.75rem 2rem;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-search:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);
+        color: #333;
+    }
+    
+    .results-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .provider-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        margin-bottom: 1rem;
+    }
+    
+    .provider-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .provider-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px 10px 0 0;
+    }
+    
+    .provider-body {
+        padding: 1.5rem;
+    }
+    
+    .info-badge {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        margin: 0.25rem;
+        display: inline-block;
+    }
+    
+    .organization-item {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .organization-item:hover {
+        border-color: #667eea;
+        background: #f8f9ff;
+        transform: translateX(5px);
+    }
+    
+    .organization-item.selected {
+        border-color: #667eea;
+        background: #e3f2fd;
+    }
+    
+    .autocomplete-container {
+        position: relative;
+    }
+    
+    .autocomplete-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 10px 10px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .autocomplete-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+    
+    .autocomplete-item:hover {
+        background: #f8f9ff;
+    }
+    
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-item {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 0.9rem;
+        margin-top: 0.25rem;
+    }
+    
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        padding: 2rem;
+    }
+    
+    .spinner-border {
+        color: #667eea;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex align-items-center mb-3">
+                <i class="bi bi-search-heart text-primary me-3" style="font-size: 2rem;"></i>
+                <div>
+                    <h1 class="h2 mb-0">TIN and Provider Lookup</h1>
+                    <p class="text-muted mb-0">Check and see if we have the specific provider you are looking for</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Container -->
+    <div class="row">
+        <div class="col-12">
+            <div class="search-container">
+                <form method="post" id="searchForm">
+                    {% csrf_token %}
+                    
+                    <!-- Search Type Tabs -->
+                    <div class="search-tabs">
+                        <button type="button" class="search-tab active" data-type="tin">
+                            <i class="bi bi-hash me-2"></i>TIN Number
+                        </button>
+                        <button type="button" class="search-tab" data-type="organization">
+                            <i class="bi bi-building me-2"></i>Organization Name
+                        </button>
+                    </div>
+                    
+                    <!-- Search Input -->
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="autocomplete-container">
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="searchInput" 
+                                       name="search_query" 
+                                       placeholder="Enter TIN number (e.g., 123456789) or organization name..."
+                                       autocomplete="off">
+                                <div class="autocomplete-results" id="autocompleteResults"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-search w-100">
+                                <i class="bi bi-search me-2"></i>Search Provider
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="search_type" id="searchType" value="tin">
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div class="loading-spinner" id="loadingSpinner">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Searching...</span>
+        </div>
+        <p class="mt-2 text-muted">Searching for providers...</p>
+    </div>
+
+    <!-- Error Message -->
+    {% if error_message %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search Results -->
+    {% if search_results %}
+    <div class="row">
+        <div class="col-12">
+            <div class="results-container">
+                <div class="p-3 border-bottom">
+                    <h4 class="mb-0">
+                        <i class="bi bi-building text-primary me-2"></i>
+                        Organizations matching "{{ search_query }}"
+                    </h4>
+                    <p class="text-muted mb-0">{{ search_results|length }} organization(s) found</p>
+                </div>
+                
+                <div class="p-3">
+                    <div class="row">
+                        {% for result in search_results %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="organization-item" data-tin="{{ result.tin_value }}">
+                                <h6 class="mb-2">{{ result.organization_name }}</h6>
+                                <div class="mb-2">
+                                    <span class="info-badge">TIN: {{ result.tin_value }}</span>
+                                    <span class="info-badge">{{ result.tin_type|upper }}</span>
+                                </div>
+                                <div class="small text-muted">
+                                    <div><strong>Payer:</strong> {{ result.payer_slug|title }}</div>
+                                    <div><strong>State:</strong> {{ result.state }}</div>
+                                    <div><strong>Billing Class:</strong> {{ result.billing_class|title }}</div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary mt-2" 
+                                        onclick="viewProviderDetails('{{ result.tin_value }}')">
+                                    <i class="bi bi-eye me-1"></i>View Details
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Provider Summary -->
+    {% if provider_summary %}
+    <div class="row">
+        <div class="col-12">
+            <div class="results-container">
+                <div class="provider-header">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h3 class="mb-2">
+                                <i class="bi bi-building me-2"></i>
+                                {{ provider_summary.organization_name|default:"Unknown Organization" }}
+                            </h3>
+                            <p class="mb-0 opacity-75">
+                                TIN: {{ provider_summary.tin_value }} | Type: {{ provider_summary.tin_type|upper }}
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <div class="stat-number">{{ provider_summary.total_records }}</div>
+                                    <div class="stat-label">Total Records</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="provider-body">
+                    <!-- Data Availability Summary -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">
+                                <i class="bi bi-geo-alt text-primary me-2"></i>Geographic Coverage
+                            </h5>
+                            <div class="mb-3">
+                                <strong>States:</strong>
+                                {% for state in provider_summary.states %}
+                                    <span class="info-badge">{{ state }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Statistical Areas:</strong>
+                                {% for area in provider_summary.stat_areas %}
+                                    <span class="info-badge">{{ area }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5 class="mb-3">
+                                <i class="bi bi-hospital text-primary me-2"></i>Service Coverage
+                            </h5>
+                            <div class="mb-3">
+                                <strong>Billing Classes:</strong>
+                                {% for billing_class in provider_summary.billing_classes %}
+                                    <span class="info-badge">{{ billing_class|title }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Procedure Sets:</strong>
+                                {% for proc_set in provider_summary.procedure_sets %}
+                                    <span class="info-badge">{{ proc_set }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Information -->
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">
+                                <i class="bi bi-credit-card text-primary me-2"></i>Insurance Coverage
+                            </h5>
+                            <div class="mb-3">
+                                <strong>Payer Slugs:</strong>
+                                {% for payer in provider_summary.payer_slugs %}
+                                    <span class="info-badge">{{ payer|title }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5 class="mb-3">
+                                <i class="bi bi-calendar text-primary me-2"></i>Data Timeline
+                            </h5>
+                            <div class="mb-3">
+                                <strong>Years:</strong>
+                                {% for year in provider_summary.years %}
+                                    <span class="info-badge">{{ year }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                <strong>Months:</strong>
+                                {% for month in provider_summary.months %}
+                                    <span class="info-badge">{{ month }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Procedure Classes and Taxonomy Codes -->
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">
+                                <i class="bi bi-list-ul text-primary me-2"></i>Procedure Classes
+                            </h5>
+                            {% for proc_class in provider_summary.procedure_classes %}
+                                <span class="info-badge">{{ proc_class }}</span>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5 class="mb-3">
+                                <i class="bi bi-tags text-primary me-2"></i>Taxonomy Codes
+                            </h5>
+                            {% for taxonomy in provider_summary.taxonomy_codes %}
+                                <span class="info-badge">{{ taxonomy }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Data Timeline -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="bi bi-clock text-primary me-2"></i>Data Timeline
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>First Seen:</strong> {{ provider_summary.first_seen }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Last Seen:</strong> {{ provider_summary.last_seen }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Instructions -->
+    {% if not search_results and not provider_summary and not error_message %}
+    <div class="row">
+        <div class="col-12">
+            <div class="results-container">
+                <div class="p-4 text-center">
+                    <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3 text-muted">Search for Providers</h4>
+                    <p class="text-muted">
+                        Use the search form above to find providers by TIN number or organization name.
+                        <br>Our database contains information about providers and their available data.
+                    </p>
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <i class="bi bi-hash text-primary mb-2" style="font-size: 2rem;"></i>
+                                    <h6>TIN Search</h6>
+                                    <p class="small text-muted">Enter a 9-digit TIN number to get detailed provider information</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <i class="bi bi-building text-primary mb-2" style="font-size: 2rem;"></i>
+                                    <h6>Organization Search</h6>
+                                    <p class="small text-muted">Search by organization name to find matching providers</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchTabs = document.querySelectorAll('.search-tab');
+    const searchInput = document.getElementById('searchInput');
+    const searchType = document.getElementById('searchType');
+    const autocompleteResults = document.getElementById('autocompleteResults');
+    const searchForm = document.getElementById('searchForm');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    
+    let autocompleteTimeout;
+    
+    // Tab switching
+    searchTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const type = this.dataset.type;
+            
+            // Update active tab
+            searchTabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Update search type
+            searchType.value = type;
+            
+            // Update placeholder
+            if (type === 'tin') {
+                searchInput.placeholder = 'Enter TIN number (e.g., 123456789)';
+            } else {
+                searchInput.placeholder = 'Enter organization name...';
+            }
+            
+            // Clear autocomplete
+            autocompleteResults.innerHTML = '';
+            autocompleteResults.style.display = 'none';
+        });
+    });
+    
+    // Autocomplete for organization search
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        const currentType = searchType.value;
+        
+        clearTimeout(autocompleteTimeout);
+        
+        if (currentType === 'organization' && query.length >= 2) {
+            autocompleteTimeout = setTimeout(() => {
+                fetchAutocompleteResults(query);
+            }, 300);
+        } else {
+            autocompleteResults.style.display = 'none';
+        }
+    });
+    
+    // Hide autocomplete when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.autocomplete-container')) {
+            autocompleteResults.style.display = 'none';
+        }
+    });
+    
+    // Form submission
+    searchForm.addEventListener('submit', function(e) {
+        const query = searchInput.value.trim();
+        if (!query) {
+            e.preventDefault();
+            return;
+        }
+        
+        loadingSpinner.style.display = 'block';
+    });
+    
+    function fetchAutocompleteResults(query) {
+        fetch(`{% url 'tin_provider_lookup_ajax' %}?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.results && data.results.length > 0) {
+                    displayAutocompleteResults(data.results);
+                } else {
+                    autocompleteResults.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Autocomplete error:', error);
+                autocompleteResults.style.display = 'none';
+            });
+    }
+    
+    function displayAutocompleteResults(results) {
+        autocompleteResults.innerHTML = '';
+        
+        results.forEach(result => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.innerHTML = `
+                <div class="fw-bold">${result.text}</div>
+                <div class="small text-muted">TIN: ${result.tin_value} | ${result.tin_type.toUpperCase()}</div>
+            `;
+            
+            item.addEventListener('click', function() {
+                searchInput.value = result.text;
+                autocompleteResults.style.display = 'none';
+            });
+            
+            autocompleteResults.appendChild(item);
+        });
+        
+        autocompleteResults.style.display = 'block';
+    }
+});
+
+function viewProviderDetails(tinValue) {
+    // Set search type to TIN and search for the selected provider
+    document.getElementById('searchType').value = 'tin';
+    document.getElementById('searchInput').value = tinValue;
+    
+    // Update active tab
+    document.querySelectorAll('.search-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.type === 'tin') {
+            tab.classList.add('active');
+        }
+    });
+    
+    // Submit the form
+    document.getElementById('searchForm').submit();
+}
+</script>
+{% endblock %}

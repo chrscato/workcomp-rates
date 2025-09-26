@@ -8,7 +8,7 @@ from django.conf import settings
 from datetime import timedelta
 from .utils.parquet_utils import ParquetDataManager
 from .utils.partition_navigator import PartitionNavigator
-from .models import UserActivity
+from .models import UserActivity, TinRecord
 from django.db import models
 import pandas as pd
 import io
@@ -1072,6 +1072,31 @@ def dataset_review_map(request):
                 'error_message': 'No partitions found matching the selected criteria'
             })
         
+        # Filter out partitions with null values in key fields
+        logger.info(f"Found {len(partitions_df)} partitions before null filtering")
+        
+        # Filter out partitions with null taxonomy_code, procedure_set, or other key fields
+        null_filter_conditions = (
+            (partitions_df['taxonomy_code'].notna()) &
+            (partitions_df['taxonomy_code'] != '') &
+            (partitions_df['taxonomy_code'] != '__NULL__') &
+            (partitions_df['procedure_set'].notna()) &
+            (partitions_df['procedure_set'] != '') &
+            (partitions_df['procedure_set'] != '__NULL__') &
+            (partitions_df['stat_area_name'].notna()) &
+            (partitions_df['stat_area_name'] != '') &
+            (partitions_df['stat_area_name'] != '__NULL__')
+        )
+        
+        partitions_df = partitions_df[null_filter_conditions]
+        
+        if partitions_df.empty:
+            return render(request, 'core/error.html', {
+                'error_message': 'No partitions with complete data found. All partitions contain null values in key fields.'
+            })
+        
+        logger.info(f"After null filtering: {len(partitions_df)} partitions with complete data")
+        
         # Get S3 paths for combination
         s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
         
@@ -1233,6 +1258,9 @@ def dataset_review(request):
     start_time = time.time()
     
     try:
+        # Import cache system
+        from .cache import DatasetCache
+        
         # Initialize partition navigator
         navigator = PartitionNavigator(
             db_path='core/data/partition_navigation.db'
@@ -1275,8 +1303,48 @@ def dataset_review(request):
                 'error_message': 'Please select all required filters: Payer, State, and Billing Class'
             })
         
-        # Search for partitions
-        partitions_df = navigator.search_partitions(filters)
+        # Get analysis parameters
+        max_rows = int(request.GET.get('max_rows', 100000))  # Default to 100k rows
+        max_partitions = int(request.GET.get('max_partitions', 500))  # Default to 500 partitions max
+        analysis_type = request.GET.get('analysis_type', 'comprehensive')
+        
+        # Generate cache key
+        cache_key = DatasetCache.generate_cache_key(all_filters, max_rows, max_partitions)
+        
+        # Try to get cached dataset info
+        cached_dataset = DatasetCache.get_cached_dataset(cache_key)
+        
+        if cached_dataset:
+            # Use cached dataset info
+            partitions_df = pd.DataFrame(cached_dataset['partitions_info'])
+            s3_paths = cached_dataset['s3_paths']
+            logger.info(f"Using cached dataset with {len(s3_paths)} partitions")
+        else:
+            # Load fresh data
+            logger.info("Loading fresh dataset from S3")
+            
+            # Search for partitions
+            partitions_df = navigator.search_partitions(filters)
+            
+            # Filter out partitions with null values in key fields
+            if not partitions_df.empty:
+                logger.info(f"Found {len(partitions_df)} partitions before null filtering")
+                
+                # Filter out partitions with null taxonomy_code, procedure_set, or other key fields
+                null_filter_conditions = (
+                    (partitions_df['taxonomy_code'].notna()) &
+                    (partitions_df['taxonomy_code'] != '') &
+                    (partitions_df['taxonomy_code'] != '__NULL__') &
+                    (partitions_df['procedure_set'].notna()) &
+                    (partitions_df['procedure_set'] != '') &
+                    (partitions_df['procedure_set'] != '__NULL__') &
+                    (partitions_df['stat_area_name'].notna()) &
+                    (partitions_df['stat_area_name'] != '') &
+                    (partitions_df['stat_area_name'] != '__NULL__')
+                )
+                
+                partitions_df = partitions_df[null_filter_conditions]
+                logger.info(f"After null filtering: {len(partitions_df)} partitions with complete data")
         
         if partitions_df.empty:
             # Render the same dataset review page with a warning message, avoiding redirects
@@ -1288,8 +1356,8 @@ def dataset_review(request):
                 'combined_df_info': {},
                 'analysis': {},
                 'sample_data': [],
-                'max_rows': int(request.GET.get('max_rows', 50000)),
-                'analysis_type': request.GET.get('analysis_type', 'comprehensive'),
+                'max_rows': max_rows,
+                'analysis_type': analysis_type,
                 'has_data': False,
                 'total_partitions': 0,
                 's3_paths_count': 0,
@@ -1303,18 +1371,25 @@ def dataset_review(request):
             }
             return render(request, 'core/dataset_review.html', context)
         
-        # Get S3 paths for combination
-        s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
-        
-        # Get analysis parameters
-        max_rows = int(request.GET.get('max_rows', 100000))  # Default to 100k rows
-        max_partitions = int(request.GET.get('max_partitions', 500))  # Default to 500 partitions max
-        analysis_type = request.GET.get('analysis_type', 'comprehensive')
-        
-        # Limit partitions to prevent timeouts
-        if len(s3_paths) > max_partitions:
-            logger.warning(f"Limiting partitions from {len(s3_paths)} to {max_partitions} to prevent timeout")
-            s3_paths = s3_paths[:max_partitions]
+        # Get S3 paths for combination (only if not cached)
+        if not cached_dataset:
+            s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
+            
+            # Limit partitions to prevent timeouts
+            if len(s3_paths) > max_partitions:
+                logger.warning(f"Limiting partitions from {len(s3_paths)} to {max_partitions} to prevent timeout")
+                s3_paths = s3_paths[:max_partitions]
+            
+            # Cache the dataset info
+            dataset_info = {
+                'partitions_info': partitions_df.to_dict('records'),
+                's3_paths': s3_paths,
+                'max_rows': max_rows,
+                'max_partitions': max_partitions,
+                'load_timestamp': time.time(),
+                'filters': all_filters
+            }
+            DatasetCache.cache_dataset(cache_key, dataset_info)
         
         # Define the columns we actually need (from fact_cols_pull.txt)
         required_columns = [
@@ -1329,8 +1404,12 @@ def dataset_review(request):
             'stat_area_name', 'stat_area_code', 'matched_address'
         ]
         
-        # Combine partitions for analysis (only load required columns)
-        logger.info(f"Starting to combine {len(s3_paths)} partitions (max_rows: {max_rows}) with {len(required_columns)} columns")
+        # Store cache key in session for filtered endpoint
+        request.session['dataset_cache_key'] = cache_key
+        request.session['dataset_filters'] = all_filters
+        
+        # Combine partitions for analysis
+        logger.info(f"Starting to combine {len(s3_paths)} partitions (max_rows: {max_rows})")
         combined_df = navigator.combine_partitions_for_analysis(s3_paths, max_rows)
         logger.info(f"Combination completed. DataFrame shape: {combined_df.shape if combined_df is not None else 'None'}")
         
@@ -1385,52 +1464,13 @@ def dataset_review(request):
                 'error_message': 'No data available with the selected filters. Please try different filter combinations.'
             })
         
-        # Perform simple analysis first
-        logger.info("Starting simple analysis...")
-        analysis = {
-            'dataset_summary': {
-                'total_rows': len(combined_df)
-            },
-            'basic_stats': {}
-        }
+        # Generate comprehensive analysis
+        logger.info("Starting comprehensive analysis...")
+        analysis = navigator.get_comprehensive_analysis(combined_df)
+        logger.info("Comprehensive analysis completed")
         
-        # DataFrame already contains only the required columns from the optimized loading
-        
-        # Get basic stats for key columns
-        key_columns = ['state', 'payer_slug', 'billing_class', 'negotiated_rate', 'organization_name', 'primary_taxonomy_desc']
-        for col in key_columns:
-            if col in combined_df.columns:
-                try:
-                    if combined_df[col].dtype == 'object':
-                        # For text columns, show unique values
-                        unique_vals = combined_df[col].dropna().unique()[:10]  # First 10 unique values
-                        analysis['basic_stats'][col] = {
-                            'type': 'categorical',
-                            'unique_count': len(combined_df[col].dropna().unique()),
-                            'sample_values': list(unique_vals)
-                        }
-                    else:
-                        # For numeric columns, show basic stats
-                        analysis['basic_stats'][col] = {
-                            'type': 'numeric',
-                            'count': combined_df[col].count(),
-                            'mean': round(combined_df[col].mean(), 2) if combined_df[col].dtype in ['int64', 'float64'] else None,
-                            'min': combined_df[col].min() if combined_df[col].dtype in ['int64', 'float64'] else None,
-                            'max': combined_df[col].max() if combined_df[col].dtype in ['int64', 'float64'] else None
-                        }
-                except Exception as e:
-                    logger.warning(f"Could not analyze column {col}: {e}")
-                    analysis['basic_stats'][col] = {'error': str(e)}
-        
-        logger.info("Simple analysis completed")
-        
-        # Add key metrics analysis
+        # Add key metrics analysis (this was missing from the comprehensive analysis)
         analysis['key_metrics'] = {}
-        
-        # Add payer breakdown if multiple payers selected
-        if filters.get('payer_slug') and len(filters['payer_slug']) > 1:
-            analysis['payer_breakdown'] = _get_payer_breakdown_analysis(combined_df, filters['payer_slug'])
-        
         key_metric_columns = [
             'stat_area_name', 'tin_value', 'county_name', 
             'primary_taxonomy_desc', 'enumeration_type', 'organization_name',
@@ -1441,139 +1481,57 @@ def dataset_review(request):
             if col in combined_df.columns:
                 try:
                     # Get unique values and their counts
-                    value_counts = combined_df[col].value_counts().head(20)  # Top 20 values
+                    value_counts = combined_df[col].value_counts().head(20)
                     
-                    # Calculate metrics for each value based on billing class
                     metrics_data = []
-                    for value in value_counts.index:
-                        if pd.notna(value):
-                            subset = combined_df[combined_df[col] == value]
-                            record_count = len(subset)
-                            
-                            # Base metrics
+                    for value, count in value_counts.items():
+                        # Filter data for this specific value
+                        value_data = combined_df[combined_df[col] == value]
+                        
+                        if len(value_data) > 0:
                             metric_item = {
                                 'value': str(value),
-                                'record_count': record_count
+                                'count': int(count),
+                                'percentage': round((count / len(combined_df)) * 100, 2)
                             }
                             
-                            # Calculate average negotiated rate
-                            if 'negotiated_rate' in subset.columns:
-                                avg_rate = subset['negotiated_rate'].mean()
-                                metric_item['avg_negotiated_rate'] = round(avg_rate, 2) if pd.notna(avg_rate) else None
+                            # Add financial metrics if negotiated_rate exists
+                            if 'negotiated_rate' in combined_df.columns:
+                                rates = value_data['negotiated_rate'].dropna()
+                                if len(rates) > 0:
+                                    metric_item['avg_negotiated_rate'] = round(rates.mean(), 2)
+                                    metric_item['median_negotiated_rate'] = round(rates.median(), 2)
+                                    metric_item['min_negotiated_rate'] = round(rates.min(), 2)
+                                    metric_item['max_negotiated_rate'] = round(rates.max(), 2)
                             
-                            # Add Medicare benchmark metrics based on billing class
-                            if 'billing_class' in subset.columns:
-                                # Check if all records have the same billing class
-                                unique_billing_classes = subset['billing_class'].dropna().unique()
-                                
-                                if len(unique_billing_classes) == 1:
-                                    billing_class = unique_billing_classes[0]
+                            # Add Medicare benchmark comparisons if available
+                            if 'medicare_professional_rate' in combined_df.columns:
+                                prof_rates = value_data['medicare_professional_rate'].dropna()
+                                if len(prof_rates) > 0:
+                                    metric_item['avg_medicare_professional_rate'] = round(prof_rates.mean(), 2)
                                     
-                                    if billing_class == 'professional':
-                                        # Professional billing - use Medicare Professional rates
-                                        if 'medicare_professional_rate' in subset.columns:
-                                            prof_medicare = subset['medicare_professional_rate'].dropna()
-                                            if len(prof_medicare) > 0:
-                                                metric_item['avg_medicare_professional_rate'] = round(prof_medicare.mean(), 2)
-                                        
-                                        if 'negotiated_rate_pct_of_medicare_professional' in subset.columns:
-                                            prof_pct = subset['negotiated_rate_pct_of_medicare_professional'].dropna()
-                                            if len(prof_pct) > 0:
-                                                metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct.mean(), 2)
+                                    # Calculate percentage of Medicare
+                                    if 'avg_negotiated_rate' in metric_item:
+                                        prof_pct = (metric_item['avg_negotiated_rate'] / prof_rates.mean()) * 100
+                                        metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct, 2)
+                            
+                            if 'medicare_asc_stateavg' in combined_df.columns:
+                                asc_rates = value_data['medicare_asc_stateavg'].dropna()
+                                if len(asc_rates) > 0:
+                                    metric_item['avg_medicare_asc_stateavg'] = round(asc_rates.mean(), 2)
                                     
-                                    elif billing_class == 'institutional':
-                                        # Institutional billing - use Medicare ASC and OPPS rates
-                                        if 'medicare_asc_stateavg' in subset.columns:
-                                            asc_medicare = subset['medicare_asc_stateavg'].dropna()
-                                            if len(asc_medicare) > 0:
-                                                metric_item['avg_medicare_asc_stateavg'] = round(asc_medicare.mean(), 2)
-                                        
-                                        if 'medicare_opps_stateavg' in subset.columns:
-                                            opps_medicare = subset['medicare_opps_stateavg'].dropna()
-                                            if len(opps_medicare) > 0:
-                                                metric_item['avg_medicare_opps_stateavg'] = round(opps_medicare.mean(), 2)
-                                        
-                                        if 'negotiated_rate_pct_of_medicare_asc' in subset.columns:
-                                            asc_pct = subset['negotiated_rate_pct_of_medicare_asc'].dropna()
-                                            if len(asc_pct) > 0:
-                                                metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct.mean(), 2)
-                                        
-                                        if 'negotiated_rate_pct_of_medicare_opps' in subset.columns:
-                                            opps_pct = subset['negotiated_rate_pct_of_medicare_opps'].dropna()
-                                            if len(opps_pct) > 0:
-                                                metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct.mean(), 2)
+                                    if 'avg_negotiated_rate' in metric_item:
+                                        asc_pct = (metric_item['avg_negotiated_rate'] / asc_rates.mean()) * 100
+                                        metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct, 2)
+                            
+                            if 'medicare_opps_stateavg' in combined_df.columns:
+                                opps_rates = value_data['medicare_opps_stateavg'].dropna()
+                                if len(opps_rates) > 0:
+                                    metric_item['avg_medicare_opps_stateavg'] = round(opps_rates.mean(), 2)
                                     
-                                    else:
-                                        # Mixed or other billing classes - calculate both
-                                        logger.info(f"Mixed billing classes for {col}={value}, calculating both professional and institutional metrics")
-                                        
-                                        # Professional metrics
-                                        if 'medicare_professional_rate' in subset.columns:
-                                            prof_medicare = subset['medicare_professional_rate'].dropna()
-                                            if len(prof_medicare) > 0:
-                                                metric_item['avg_medicare_professional_rate'] = round(prof_medicare.mean(), 2)
-                                        
-                                        if 'negotiated_rate_pct_of_medicare_professional' in subset.columns:
-                                            prof_pct = subset['negotiated_rate_pct_of_medicare_professional'].dropna()
-                                            if len(prof_pct) > 0:
-                                                metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct.mean(), 2)
-                                        
-                                        # Institutional metrics
-                                        if 'medicare_asc_stateavg' in subset.columns:
-                                            asc_medicare = subset['medicare_asc_stateavg'].dropna()
-                                            if len(asc_medicare) > 0:
-                                                metric_item['avg_medicare_asc_stateavg'] = round(asc_medicare.mean(), 2)
-                                        
-                                        if 'medicare_opps_stateavg' in subset.columns:
-                                            opps_medicare = subset['medicare_opps_stateavg'].dropna()
-                                            if len(opps_medicare) > 0:
-                                                metric_item['avg_medicare_opps_stateavg'] = round(opps_medicare.mean(), 2)
-                                        
-                                        if 'negotiated_rate_pct_of_medicare_asc' in subset.columns:
-                                            asc_pct = subset['negotiated_rate_pct_of_medicare_asc'].dropna()
-                                            if len(asc_pct) > 0:
-                                                metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct.mean(), 2)
-                                        
-                                        if 'negotiated_rate_pct_of_medicare_opps' in subset.columns:
-                                            opps_pct = subset['negotiated_rate_pct_of_medicare_opps'].dropna()
-                                            if len(opps_pct) > 0:
-                                                metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct.mean(), 2)
-                                
-                                else:
-                                    # Mixed billing classes - calculate both
-                                    logger.info(f"Mixed billing classes for {col}={value}, calculating both professional and institutional metrics")
-                                    
-                                    # Professional metrics
-                                    if 'medicare_professional_rate' in subset.columns:
-                                        prof_medicare = subset['medicare_professional_rate'].dropna()
-                                        if len(prof_medicare) > 0:
-                                            metric_item['avg_medicare_professional_rate'] = round(prof_medicare.mean(), 2)
-                                    
-                                    if 'negotiated_rate_pct_of_medicare_professional' in subset.columns:
-                                        prof_pct = subset['negotiated_rate_pct_of_medicare_professional'].dropna()
-                                        if len(prof_pct) > 0:
-                                            metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct.mean(), 2)
-                                    
-                                    # Institutional metrics
-                                    if 'medicare_asc_stateavg' in subset.columns:
-                                        asc_medicare = subset['medicare_asc_stateavg'].dropna()
-                                        if len(asc_medicare) > 0:
-                                            metric_item['avg_medicare_asc_stateavg'] = round(asc_medicare.mean(), 2)
-                                    
-                                    if 'medicare_opps_stateavg' in subset.columns:
-                                        opps_medicare = subset['medicare_opps_stateavg'].dropna()
-                                        if len(opps_medicare) > 0:
-                                            metric_item['avg_medicare_opps_stateavg'] = round(opps_medicare.mean(), 2)
-                                    
-                                    if 'negotiated_rate_pct_of_medicare_asc' in subset.columns:
-                                        asc_pct = subset['negotiated_rate_pct_of_medicare_asc'].dropna()
-                                        if len(asc_pct) > 0:
-                                            metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct.mean(), 2)
-                                    
-                                    if 'negotiated_rate_pct_of_medicare_opps' in subset.columns:
-                                        opps_pct = subset['negotiated_rate_pct_of_medicare_opps'].dropna()
-                                        if len(opps_pct) > 0:
-                                            metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct.mean(), 2)
+                                    if 'avg_negotiated_rate' in metric_item:
+                                        opps_pct = (metric_item['avg_negotiated_rate'] / opps_rates.mean()) * 100
+                                        metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct, 2)
                             
                             metrics_data.append(metric_item)
                     
@@ -1601,59 +1559,6 @@ def dataset_review(request):
                 except Exception as e:
                     logger.warning(f"Could not analyze key metric {col}: {e}")
                     analysis['key_metrics'][col] = {'error': str(e)}
-        
-        # Add payer comparison analysis if multiple payers are selected
-        analysis['payer_comparison'] = {}
-        if 'payer_slug' in combined_df.columns:
-            try:
-                # Get unique payers in the dataset
-                unique_payers = combined_df['payer_slug'].dropna().unique()
-                
-                if len(unique_payers) > 1:
-                    payer_comparison_data = []
-                    
-                    for payer in unique_payers:
-                        payer_data = combined_df[combined_df['payer_slug'] == payer]
-                        
-                        # Calculate metrics for this payer
-                        payer_metrics = {
-                            'payer_slug': str(payer),
-                            'record_count': len(payer_data),
-                            'avg_negotiated_rate': round(payer_data['negotiated_rate'].mean(), 2) if 'negotiated_rate' in payer_data.columns else None,
-                            'median_negotiated_rate': round(payer_data['negotiated_rate'].median(), 2) if 'negotiated_rate' in payer_data.columns else None,
-                            'min_negotiated_rate': round(payer_data['negotiated_rate'].min(), 2) if 'negotiated_rate' in payer_data.columns else None,
-                            'max_negotiated_rate': round(payer_data['negotiated_rate'].max(), 2) if 'negotiated_rate' in payer_data.columns else None,
-                        }
-                        
-                        # Add top taxonomy descriptions for this payer
-                        if 'primary_taxonomy_desc' in payer_data.columns:
-                            top_taxonomies = payer_data['primary_taxonomy_desc'].value_counts().head(5)
-                            payer_metrics['top_taxonomies'] = [
-                                {'desc': str(desc), 'count': count} 
-                                for desc, count in top_taxonomies.items()
-                            ]
-                        
-                        # Add top organizations for this payer
-                        if 'organization_name' in payer_data.columns:
-                            top_orgs = payer_data['organization_name'].value_counts().head(5)
-                            payer_metrics['top_organizations'] = [
-                                {'name': str(name), 'count': count} 
-                                for name, count in top_orgs.items()
-                            ]
-                        
-                        payer_comparison_data.append(payer_metrics)
-                    
-                    # Sort by record count (descending)
-                    payer_comparison_data.sort(key=lambda x: x['record_count'], reverse=True)
-                    
-                    analysis['payer_comparison'] = {
-                        'total_payers': len(unique_payers),
-                        'payers': payer_comparison_data
-                    }
-                    
-            except Exception as e:
-                logger.warning(f"Could not analyze payer comparison: {e}")
-                analysis['payer_comparison'] = {'error': str(e)}
         
         # Get sample data for preview
         sample_data = combined_df.head(100).to_dict('records') if not combined_df.empty else []
@@ -1745,30 +1650,18 @@ def dataset_review(request):
 
 
 @login_required
-def dataset_review_filtered(request):
-    """
-    API endpoint for client-side filtering on the existing combined DataFrame
-    This avoids regenerating partitions and works with the data already in memory
-    """
-    import json
-    
+def dataset_review_data(request):
+    """Single endpoint that loads data once and returns as JSON for PowerBI-style client-side filtering"""
     try:
-        import pandas as pd
-        
-        # Get all filters from request (same as original dataset_review)
+        # Get filters from request
         all_filters = {
             'payer_slug': request.GET.getlist('payer_slug'),
             'state': request.GET.get('state'),
             'billing_class': request.GET.get('billing_class'),
             'procedure_set': request.GET.get('procedure_set'),
             'taxonomy_code': request.GET.get('taxonomy_code'),
-            # Additional analysis filters (may be multi-valued)
             'taxonomy_desc': request.GET.getlist('taxonomy_desc') or request.GET.get('taxonomy_desc'),
             'stat_area_name': request.GET.getlist('stat_area_name') or request.GET.get('stat_area_name'),
-            'county_name': request.GET.getlist('county_name') or request.GET.get('county_name'),
-            'proc_class': request.GET.getlist('proc_class') or request.GET.get('proc_class'),
-            'proc_group': request.GET.getlist('proc_group') or request.GET.get('proc_group'),
-            'code': request.GET.getlist('code') or request.GET.get('code'),
             'year': request.GET.get('year'),
             'month': request.GET.get('month')
         }
@@ -1776,30 +1669,28 @@ def dataset_review_filtered(request):
         # Remove empty filters
         all_filters = {k: v for k, v in all_filters.items() if v and (not isinstance(v, list) or len(v) > 0)}
         
-        # Separate partition-level filters from data-level filters (same as original)
-        partition_filters = {k: v for k, v in all_filters.items() if k in ['payer_slug', 'state', 'billing_class', 'procedure_set', 'taxonomy_code', 'taxonomy_desc', 'stat_area_name', 'year', 'month']}
-        data_filters = {k: v for k, v in all_filters.items() if k in ['proc_class', 'proc_group', 'code', 'county_name']}
+        # Get parameters with reduced defaults for better performance
+        max_rows = int(request.GET.get('max_rows', 100000))  # Increased to 100k rows
+        max_partitions = int(request.GET.get('max_partitions', 200))  # Reduced default
         
-        # Initialize partition navigator
-        navigator = PartitionNavigator(
-            db_path='core/data/partition_navigation.db'
-        )
+        # Initialize navigator
+        navigator = PartitionNavigator(db_path='core/data/partition_navigation.db')
         
-        # Get partitions based on partition-level filters
+        # Search for partitions
+        partition_filters = {k: v for k, v in all_filters.items() 
+                           if k in ['payer_slug', 'state', 'billing_class', 'procedure_set', 
+                                   'taxonomy_code', 'taxonomy_desc', 'stat_area_name', 'year', 'month']}
+        
         partitions_df = navigator.search_partitions(partition_filters)
         
         if partitions_df.empty:
             return JsonResponse({
-                'error': 'No partitions found for the given filters',
+                'error': 'No data available with the selected filters.',
                 'has_data': False
             })
         
-        # Get S3 paths for combination
+        # Get S3 paths
         s3_paths = [f"s3://{row['s3_bucket']}/{row['s3_key']}" for _, row in partitions_df.iterrows()]
-        
-        # Get analysis parameters
-        max_rows = int(request.GET.get('max_rows', 100000))
-        max_partitions = int(request.GET.get('max_partitions', 500))
         
         # Limit partitions
         if len(s3_paths) > max_partitions:
@@ -1810,169 +1701,11 @@ def dataset_review_filtered(request):
         
         if combined_df is None or combined_df.empty:
             return JsonResponse({
-                'error': 'Failed to load data from partitions',
+                'error': 'Failed to load data from partitions.',
                 'has_data': False
             })
         
-        # Apply client-side filters to the existing DataFrame
-        original_count = len(combined_df)
-        filtered_df = combined_df.copy()
-        
-        # Apply data-level filters to the existing DataFrame
-        for filter_name, filter_values in data_filters.items():
-            if filter_values and filter_name in filtered_df.columns:
-                if isinstance(filter_values, list):
-                    filtered_df = filtered_df[filtered_df[filter_name].isin(filter_values)]
-                else:
-                    filtered_df = filtered_df[filtered_df[filter_name] == filter_values]
-        
-        # Generate analysis for filtered data
-        analysis = {
-            'dataset_summary': {
-                'total_rows': len(filtered_df),
-                'original_rows': original_count,
-                'rows_filtered': original_count - len(filtered_df)
-            },
-            'basic_stats': {},
-            'key_metrics': {}
-        }
-        
-        # Basic stats for key columns
-        key_columns = ['state', 'payer_slug', 'billing_class', 'negotiated_rate', 'organization_name', 'primary_taxonomy_desc']
-        for col in key_columns:
-            if col in filtered_df.columns:
-                try:
-                    if filtered_df[col].dtype == 'object':
-                        unique_vals = filtered_df[col].dropna().unique()[:10]
-                        analysis['basic_stats'][col] = {
-                            'type': 'categorical',
-                            'unique_count': len(filtered_df[col].dropna().unique()),
-                            'sample_values': list(unique_vals)
-                        }
-                    else:
-                        analysis['basic_stats'][col] = {
-                            'type': 'numeric',
-                            'count': filtered_df[col].count(),
-                            'mean': round(filtered_df[col].mean(), 2) if filtered_df[col].dtype in ['int64', 'float64'] else None,
-                            'min': filtered_df[col].min() if filtered_df[col].dtype in ['int64', 'float64'] else None,
-                            'max': filtered_df[col].max() if filtered_df[col].dtype in ['int64', 'float64'] else None
-                        }
-                except Exception as e:
-                    analysis['basic_stats'][col] = {'error': str(e)}
-        
-        # Add comprehensive key metrics analysis (same as main dataset_review)
-        key_metric_columns = [
-            'stat_area_name', 'tin_value', 'county_name', 
-            'primary_taxonomy_desc', 'enumeration_type', 'organization_name',
-            'proc_class', 'proc_group', 'code'
-        ]
-        
-        for col in key_metric_columns:
-            if col in filtered_df.columns:
-                try:
-                    # Get unique values and their counts
-                    value_counts = filtered_df[col].value_counts().head(20)
-                    
-                    metrics_data = []
-                    for value, count in value_counts.items():
-                        # Filter data for this specific value
-                        value_data = filtered_df[filtered_df[col] == value]
-                        
-                        if len(value_data) > 0:
-                            metric_item = {
-                                'value': str(value),
-                                'count': int(count),
-                                'percentage': round((count / len(filtered_df)) * 100, 2)
-                            }
-                            
-                            # Add financial metrics if negotiated_rate exists
-                            if 'negotiated_rate' in filtered_df.columns:
-                                rates = value_data['negotiated_rate'].dropna()
-                                if len(rates) > 0:
-                                    metric_item['avg_negotiated_rate'] = round(rates.mean(), 2)
-                                    metric_item['median_negotiated_rate'] = round(rates.median(), 2)
-                                    metric_item['min_negotiated_rate'] = round(rates.min(), 2)
-                                    metric_item['max_negotiated_rate'] = round(rates.max(), 2)
-                            
-                            # Add Medicare benchmark comparisons if available
-                            if 'medicare_professional_rate' in filtered_df.columns:
-                                prof_rates = value_data['medicare_professional_rate'].dropna()
-                                if len(prof_rates) > 0:
-                                    metric_item['avg_medicare_professional_rate'] = round(prof_rates.mean(), 2)
-                                    
-                                    # Calculate percentage of Medicare
-                                    if 'avg_negotiated_rate' in metric_item:
-                                        prof_pct = (metric_item['avg_negotiated_rate'] / prof_rates.mean()) * 100
-                                        metric_item['avg_negotiated_rate_pct_of_medicare_professional'] = round(prof_pct, 2)
-                            
-                            if 'medicare_asc_stateavg' in filtered_df.columns:
-                                asc_rates = value_data['medicare_asc_stateavg'].dropna()
-                                if len(asc_rates) > 0:
-                                    metric_item['avg_medicare_asc_stateavg'] = round(asc_rates.mean(), 2)
-                                    
-                                    if 'avg_negotiated_rate' in metric_item:
-                                        asc_pct = (metric_item['avg_negotiated_rate'] / asc_rates.mean()) * 100
-                                        metric_item['avg_negotiated_rate_pct_of_medicare_asc'] = round(asc_pct, 2)
-                            
-                            if 'medicare_opps_stateavg' in filtered_df.columns:
-                                opps_rates = value_data['medicare_opps_stateavg'].dropna()
-                                if len(opps_rates) > 0:
-                                    metric_item['avg_medicare_opps_stateavg'] = round(opps_rates.mean(), 2)
-                                    
-                                    if 'avg_negotiated_rate' in metric_item:
-                                        opps_pct = (metric_item['avg_negotiated_rate'] / opps_rates.mean()) * 100
-                                        metric_item['avg_negotiated_rate_pct_of_medicare_opps'] = round(opps_pct, 2)
-                            
-                            metrics_data.append(metric_item)
-                    
-                    # Add formatting flags for frontend
-                    key_metrics_info = {
-                        'total_unique_values': len(filtered_df[col].dropna().unique()),
-                        'top_values': metrics_data[:10]  # Top 10 for display
-                    }
-                    
-                    # Add formatting information for frontend
-                    formatting_info = {
-                        'avg_negotiated_rate': {'currency_format': True},
-                        'avg_medicare_professional_rate': {'currency_format': True},
-                        'avg_medicare_asc_stateavg': {'currency_format': True},
-                        'avg_medicare_opps_stateavg': {'currency_format': True},
-                        'avg_negotiated_rate_pct_of_medicare_professional': {'percentage_format': True},
-                        'avg_negotiated_rate_pct_of_medicare_asc': {'percentage_format': True},
-                        'avg_negotiated_rate_pct_of_medicare_opps': {'percentage_format': True}
-                    }
-                    
-                    key_metrics_info['formatting_info'] = formatting_info
-                    
-                    analysis['key_metrics'][col] = key_metrics_info
-                    
-                except Exception as e:
-                    logger.warning(f"Could not analyze key metric {col}: {e}")
-                    analysis['key_metrics'][col] = {'error': str(e)}
-        
-        # Sample data (handle NaN values)
-        if not filtered_df.empty:
-            # Replace NaN values with None for JSON serialization
-            sample_df = filtered_df.head(100).copy()
-            sample_df = sample_df.where(pd.notnull(sample_df), None)
-            sample_data = sample_df.to_dict('records')
-        else:
-            sample_data = []
-        
-        # Get updated available filter options from filtered data
-        available_filters = {}
-        if not filtered_df.empty:
-            available_filters = {
-                'available_taxonomy_descs': sorted(filtered_df['primary_taxonomy_desc'].dropna().unique().tolist())[:500],
-                'available_proc_classes': sorted(filtered_df['proc_class'].dropna().unique().tolist())[:500],
-                'available_proc_groups': sorted(filtered_df['proc_group'].dropna().unique().tolist())[:500],
-                'available_codes': sorted(filtered_df['code'].dropna().unique().tolist())[:500],
-                'available_county_names': sorted(filtered_df['county_name'].dropna().unique().tolist())[:500],
-                'available_stat_area_names': sorted(filtered_df['stat_area_name'].dropna().unique().tolist())[:500],
-                'available_payer_slugs': sorted(filtered_df['payer_slug'].dropna().unique().tolist())[:500]
-            }
-        
-        # Convert numpy types to Python types for JSON serialization
+        # Convert to JSON-serializable format with proper NaN handling
         def convert_numpy_types(obj):
             import numpy as np
             import math
@@ -1980,7 +1713,6 @@ def dataset_review_filtered(request):
             if isinstance(obj, np.integer):
                 return int(obj)
             elif isinstance(obj, np.floating):
-                # Handle NaN and infinity values
                 if np.isnan(obj) or math.isnan(obj):
                     return None
                 elif np.isinf(obj) or math.isinf(obj):
@@ -1989,32 +1721,41 @@ def dataset_review_filtered(request):
                     return float(obj)
             elif isinstance(obj, np.ndarray):
                 return obj.tolist()
-            elif hasattr(obj, 'item'):  # numpy scalar
+            elif hasattr(obj, 'item'):
                 result = obj.item()
-                # Handle NaN values from .item()
                 if isinstance(result, float) and (np.isnan(result) or math.isnan(result)):
                     return None
                 return result
-            elif isinstance(obj, dict):
-                return {k: convert_numpy_types(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [convert_numpy_types(item) for item in obj]
             elif isinstance(obj, float):
-                # Handle regular Python float NaN values
                 if math.isnan(obj):
                     return None
             return obj
         
-        # Convert sample data to ensure JSON serialization
-        sample_data_serializable = []
-        for record in sample_data:
-            sample_data_serializable.append(convert_numpy_types(record))
+        # Convert DataFrame to records with proper NaN handling
+        data_records = []
+        for _, row in combined_df.head(max_rows).iterrows():
+            record = {}
+            for col, value in row.items():
+                record[col] = convert_numpy_types(value)
+            data_records.append(record)
         
-        # Convert analysis data
-        analysis_serializable = convert_numpy_types(analysis)
-        available_filters_serializable = convert_numpy_types(available_filters)
+        # Get filter options from the data with proper NaN handling
+        filter_options = {}
+        key_columns = ['proc_class', 'proc_group', 'code', 'county_name', 'primary_taxonomy_desc', 'stat_area_name']
         
-        # Use Django's JSONResponse with custom encoder to handle NaN values
+        for col in key_columns:
+            if col in combined_df.columns:
+                unique_values = combined_df[col].dropna().unique().tolist()
+                filter_options[col] = [convert_numpy_types(val) for val in unique_values[:100]]
+        
+        # Store in session for potential export
+        request.session['current_dataset'] = {
+            'filters': all_filters,
+            'total_rows': len(combined_df),
+            's3_paths': s3_paths
+        }
+        
+        # Use custom JSON encoder to handle any remaining NaN values
         from django.core.serializers.json import DjangoJSONEncoder
         
         class NaNHandlingJSONEncoder(DjangoJSONEncoder):
@@ -2026,23 +1767,25 @@ def dataset_review_filtered(request):
         
         return JsonResponse({
             'has_data': True,
-            'analysis': analysis_serializable,
-            'sample_data': sample_data_serializable,
-            'available_filters': available_filters_serializable,
-            'combined_df_info': {
-                'shape': [int(filtered_df.shape[0]), int(filtered_df.shape[1])],
-                'columns': list(filtered_df.columns)
+            'data': data_records,
+            'filter_options': filter_options,
+            'metadata': {
+                'total_rows': len(combined_df),
+                'loaded_rows': len(data_records),
+                'partitions_used': len(s3_paths),
+                'columns': list(combined_df.columns)
             }
         }, encoder=NaNHandlingJSONEncoder)
         
     except Exception as e:
-        logger.error(f"Error in dataset_review_filtered: {str(e)}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in dataset_review_data: {str(e)}")
         return JsonResponse({
             'error': str(e),
             'has_data': False
         })
+
+
+
 
 
 @login_required
@@ -2353,6 +2096,108 @@ def user_activity_dashboard(request):
         cache.set(cache_key, context, 300)
 
     return render(request, 'core/user_activity_dashboard.html', context)
+
+
+@login_required
+def tin_provider_lookup(request):
+    """
+    TIN and Provider Lookup view
+    Allows users to search for providers by TIN or organization name
+    """
+    context = {
+        'search_results': None,
+        'provider_summary': None,
+        'search_type': None,
+        'search_query': None,
+        'error_message': None
+    }
+    
+    if request.method == 'POST':
+        search_type = request.POST.get('search_type')
+        search_query = request.POST.get('search_query', '').strip()
+        
+        if not search_query:
+            context['error_message'] = 'Please enter a search term.'
+        else:
+            try:
+                if search_type == 'tin':
+                    # Search by TIN
+                    provider_summary = TinRecord.get_provider_summary(search_query)
+                    if provider_summary:
+                        context['provider_summary'] = provider_summary
+                        context['search_type'] = 'tin'
+                        context['search_query'] = search_query
+                        
+                        # Log the search activity
+                        UserActivity.log_activity(
+                            user=request.user,
+                            action='tin_lookup',
+                            page_url=request.get_full_path(),
+                            page_title='TIN and Provider Lookup',
+                            tin_value=search_query
+                        )
+                    else:
+                        context['error_message'] = f'No provider found with TIN: {search_query}'
+                        
+                elif search_type == 'organization':
+                    # Search by organization name
+                    search_results = TinRecord.search_by_organization_name(search_query)
+                    if search_results:
+                        context['search_results'] = search_results
+                        context['search_type'] = 'organization'
+                        context['search_query'] = search_query
+                        
+                        # Log the search activity
+                        UserActivity.log_activity(
+                            user=request.user,
+                            action='organization_lookup',
+                            page_url=request.get_full_path(),
+                            page_title='TIN and Provider Lookup',
+                            organization_name=search_query
+                        )
+                    else:
+                        context['error_message'] = f'No organizations found matching: {search_query}'
+                        
+            except Exception as e:
+                logger.error(f"Error in TIN/Provider lookup: {str(e)}")
+                context['error_message'] = 'An error occurred while searching. Please try again.'
+    
+    return render(request, 'core/tin_provider_lookup.html', context)
+
+
+@login_required
+def tin_provider_lookup_ajax(request):
+    """
+    AJAX endpoint for organization name search with autocomplete
+    """
+    if request.method == 'GET':
+        query = request.GET.get('q', '').strip()
+        
+        if len(query) < 2:
+            return JsonResponse({'results': []})
+        
+        try:
+            results = TinRecord.search_by_organization_name(query, limit=20)
+            
+            # Format results for autocomplete
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    'id': result['tin_value'],
+                    'text': result['organization_name'],
+                    'tin_value': result['tin_value'],
+                    'tin_type': result['tin_type'],
+                    'payer_slug': result['payer_slug'],
+                    'state': result['state']
+                })
+            
+            return JsonResponse({'results': formatted_results})
+            
+        except Exception as e:
+            logger.error(f"Error in AJAX organization search: {str(e)}")
+            return JsonResponse({'error': 'Search failed'}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
 
 
 

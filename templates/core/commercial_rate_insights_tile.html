@@ -8,6 +8,7 @@
 {% block extra_head %}
 <!-- Select2 for enhanced dropdowns -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
@@ -17,25 +18,32 @@
     }
     
     .filter-tier .card {
-        border: 1px solid #dee2e6;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border: 1px solid #e3f2fd;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        overflow: hidden;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     }
     
     .filter-tier .card-header {
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #dee2e6;
+        background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+        border-bottom: none;
+        color: white;
+        padding: 1.25rem;
     }
     
     .filter-tier-title {
-        font-size: 1.1rem;
+        font-size: 1.2rem;
         font-weight: 600;
         margin-bottom: 0;
-        color: #495057;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
     
     .partition-summary .card {
-        border: 1px solid #dee2e6;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border: 1px solid #e3f2fd;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
     }
     
     .summary-metric {
@@ -46,7 +54,7 @@
     .summary-metric h3 {
         font-size: 2rem;
         font-weight: 700;
-        color: #0d6efd;
+        color: #1976d2;
         margin-bottom: 0.5rem;
     }
     
@@ -56,32 +64,243 @@
         margin: 0;
     }
     
-    .form-select {
-        border-radius: 8px;
-        border: 1px solid #ced4da;
+    /* Enhanced Select2 Styling */
+    .select2-container {
+        width: 100% !important;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection {
+        border: 2px solid #e3f2fd;
+        border-radius: 10px;
         background: white;
-        color: #495057;
-        transition: all 0.15s ease-in-out;
+        transition: all 0.3s ease;
+        min-height: 48px;
+        padding: 8px 12px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     
-    .form-select:focus {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    .select2-container--bootstrap-5 .select2-selection:hover {
+        border-color: #90caf9;
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.15);
     }
     
-    .form-select:hover {
-        border-color: #adb5bd;
+    .select2-container--bootstrap-5.select2-container--focus .select2-selection {
+        border-color: #1976d2;
+        box-shadow: 0 0 0 0.2rem rgba(25, 118, 210, 0.25);
+        background: #fafafa;
     }
     
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        color: #333;
+        line-height: 32px;
+        font-weight: 500;
+        padding-left: 0;
+    }
     
-    .form-select.is-invalid {
-        border-color: #dc3545;
-        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__rendered {
+        padding: 0;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice {
+        background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+        border: none;
+        border-radius: 20px;
+        color: white;
+        padding: 4px 12px;
+        margin: 2px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove {
+        color: white;
+        margin-right: 6px;
+        font-weight: bold;
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove:hover {
+        color: #ffcdd2;
+    }
+    
+    .select2-dropdown {
+        border: 2px solid #e3f2fd;
+        border-radius: 10px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        background: white;
+        overflow: hidden;
+    }
+    
+    .select2-container--bootstrap-5 .select2-results__option {
+        padding: 12px 16px;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    
+    .select2-container--bootstrap-5 .select2-results__option--highlighted {
+        background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+        color: white;
+        font-weight: 500;
+    }
+    
+    .select2-container--bootstrap-5 .select2-results__option--selected {
+        background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%);
+        color: white;
+        font-weight: 600;
+    }
+    
+    .select2-container--bootstrap-5 .select2-search--dropdown .select2-search__field {
+        border: 2px solid #e3f2fd;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
+        margin: 8px;
+        width: calc(100% - 16px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .select2-container--bootstrap-5 .select2-search--dropdown .select2-search__field:focus {
+        border-color: #1976d2;
+        box-shadow: 0 0 0 0.2rem rgba(25, 118, 210, 0.25);
+        outline: none;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
     }
     
     .form-text {
-        font-size: 0.875rem;
-        margin-top: 0.25rem;
+        font-size: 0.85rem;
+        margin-top: 6px;
+        color: #666;
+        font-style: italic;
+    }
+    
+    .form-select.is-invalid {
+        border-color: #f44336;
+        box-shadow: 0 0 0 0.2rem rgba(244, 67, 54, 0.25);
+    }
+    
+    /* Professional button styling */
+    .btn-primary {
+        background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-weight: 600;
+        box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+        box-shadow: 0 6px 12px rgba(25, 118, 210, 0.4);
+        transform: translateY(-1px);
+    }
+    
+    .btn-outline-secondary {
+        border: 2px solid #e0e0e0;
+        color: #666;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-outline-secondary:hover {
+        border-color: #1976d2;
+        color: #1976d2;
+        background: rgba(25, 118, 210, 0.05);
+    }
+    
+    /* Enhanced dropdown specific styling */
+    .enhanced-dropdown {
+        border-radius: 12px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    .enhanced-dropdown .select2-results__option {
+        padding: 14px 20px !important;
+        font-size: 0.95rem !important;
+        transition: all 0.2s ease !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+    }
+    
+    .enhanced-dropdown .select2-results__option:hover {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+        color: #1976d2 !important;
+        font-weight: 500 !important;
+        transform: translateX(4px) !important;
+    }
+    
+    .enhanced-dropdown .select2-results__option--highlighted {
+        background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        transform: translateX(4px) !important;
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3) !important;
+    }
+    
+    .enhanced-dropdown .select2-search--dropdown {
+        padding: 12px !important;
+        background: #f8f9fa !important;
+        border-bottom: 2px solid #e3f2fd !important;
+    }
+    
+    .enhanced-dropdown .select2-search__field {
+        font-size: 0.95rem !important;
+        padding: 12px 16px !important;
+        border-radius: 8px !important;
+        border: 2px solid #e3f2fd !important;
+        background: white !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    .enhanced-dropdown .select2-search__field:focus {
+        border-color: #1976d2 !important;
+        box-shadow: 0 0 0 0.2rem rgba(25, 118, 210, 0.25) !important;
+    }
+    
+    /* Loading and empty states */
+    .select2-container--bootstrap-5 .select2-results__message {
+        padding: 20px !important;
+        text-align: center !important;
+        color: #666 !important;
+        font-style: italic !important;
+    }
+    
+    .select2-container--bootstrap-5 .select2-results__option--load-more {
+        background: #f8f9fa !important;
+        color: #1976d2 !important;
+        text-align: center !important;
+        font-weight: 600 !important;
+        padding: 16px !important;
+    }
+    
+    /* Keyboard navigation improvements */
+    .select2-container--bootstrap-5 .select2-results__option[aria-selected="true"] {
+        background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Animation for dropdown opening */
+    .select2-dropdown {
+        animation: slideDown 0.2s ease-out !important;
+    }
+    
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 </style>
 {% endblock %}
@@ -177,57 +396,67 @@
         </div>
     {% endif %}
 
-    <!-- Partition Summary -->
-    {% if partition_summary.partition_count > 0 %}
+    <!-- Filtering Instructions -->
     <div class="partition-summary">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-graph-up text-success me-2"></i>
-                    Search Results
+                    <i class="bi bi-funnel text-primary me-2"></i>
+                    Filtering Instructions
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-3">
-                        <div class="summary-metric">
-                            <h3>{{ partition_summary.partition_count }}</h3>
-                            <p>Partitions Found</p>
+                    <div class="col-md-9">
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Select required records, please filter lower level to improve performance.</strong>
+                            <p class="mb-0 mt-2">Use the filters below to narrow down your search criteria for better performance and more targeted results.</p>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="summary-metric">
-                            <h3>{{ partition_summary.total_size_mb|floatformat:1 }} MB</h3>
-                            <p>Total Size</p>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="summary-metric">
-                            <h3>{{ partition_summary.total_estimated_records|intcomma }}</h3>
-                            <p>Estimated Records</p>
-                        </div>
-                    </div>
-                        <div class="col-md-3">
-                            <div class="summary-metric">
-                                {% if has_required_filters %}
-                                    <div class="d-grid gap-2">
-                                        <a href="{% url 'dataset_review_loading' %}?{% for key, value in current_filters.items %}{% if key == 'payer_slug' and value|length > 0 %}{% for slug in value %}{{ key }}={{ slug }}&{% endfor %}{% else %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
-                                           class="btn btn-primary btn-lg">
-                                            <i class="bi bi-search me-2"></i> Analyze Rates
+                            {% if has_required_filters %}
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'dataset_review_loading' %}?{% for key, value in current_filters.items %}{% if key == 'payer_slug' and value|length > 0 %}{% for slug in value %}{{ key }}={{ slug }}&{% endfor %}{% else %}{{ key }}={{ value }}&{% endif %}{% endfor %}" 
+                                       class="btn btn-primary btn-lg">
+                                        <i class="bi bi-search me-2"></i> Analyze Rates
+                                    </a>
+                                    {% if current_filters.state %}
+                                        <a href="{% url 'transparency' state=current_filters.state %}" class="btn btn-outline-success">
+                                            <i class="bi bi-graph-up me-2"></i> Transparency Dashboard
                                         </a>
-                                        {% if current_filters.state %}
-                                            <a href="{% url 'transparency' state=current_filters.state %}" class="btn btn-outline-success">
-                                                <i class="bi bi-graph-up me-2"></i> Transparency Dashboard
-                                            </a>
-                                        {% endif %}
-                                    </div>
-                                {% else %}
-                                    <button class="btn btn-outline-secondary btn-lg" disabled>
-                                        <i class="bi bi-lock me-2"></i> Select Required Filters
-                                    </button>
-                                {% endif %}
-                            </div>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <button class="btn btn-outline-secondary btn-lg" disabled>
+                                    <i class="bi bi-lock me-2"></i> Select Required Filters
+                                </button>
+                            {% endif %}
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results Summary -->
+    {% if current_filters.payer_slug or current_filters.state or current_filters.billing_class %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>
+                        Search Results Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Found {{ partition_summary.total_estimated_records|intcomma }} records</strong> matching your search criteria.
+                        <p class="mb-0 mt-2">These records are distributed across {{ partition_summary.partition_count }} data partitions.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -426,7 +655,7 @@
         <div class="row mt-4">
             <div class="col-12 text-center">
                 <button type="submit" class="btn btn-primary btn-lg me-3">
-                    <i class="bi bi-search me-2"></i> Search Partitions
+                    <i class="bi bi-search me-2"></i> Search for Rates
                 </button>
                 <a href="{% url 'commercial_rate_insights' %}" class="btn btn-outline-secondary btn-lg">
                     <i class="bi bi-x-circle me-2"></i> Clear All Filters
@@ -436,94 +665,18 @@
     </form>
 
     <!-- Data Availability Visualization -->
-    {% if partition_summary.partition_count > 0 %}
+    {% if partition_summary.available_filters %}
     <div class="row mt-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
                         <i class="bi bi-bar-chart text-primary me-2"></i> 
-                        Data Availability Overview ({{ partition_summary.partition_count }} partitions, {{ partition_summary.total_estimated_records|intcomma }} records)
+                        Data Availability Overview
                     </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Summary Stats -->
-                    <div class="row mb-4">
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h3 text-primary mb-1">{{ partition_summary.partition_count }}</div>
-                                <small class="text-muted">Partitions</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h3 text-success mb-1">{{ partition_summary.total_estimated_records|intcomma }}</div>
-                                <small class="text-muted">Total Records</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h3 text-info mb-1">{{ partition_summary.total_size_mb|floatformat:1 }} MB</div>
-                                <small class="text-muted">Data Size</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h3 text-warning mb-1">{{ partition_summary.available_filters|length }}</div>
-                                <small class="text-muted">Filter Options</small>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Payer Breakdown (if multiple payers selected) -->
-                    {% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-building text-primary me-1"></i>
-                                        Payer Breakdown
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover">
-                                            <thead class="table-light">
-                                                <tr>
-                                                    <th>Payer</th>
-                                                    <th class="text-end">Records</th>
-                                                    <th class="text-end">Partitions</th>
-                                                    <th class="text-end">Size (MB)</th>
-                                                    <th class="text-end">% of Total</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for payer in partition_summary.payer_breakdown %}
-                                                <tr>
-                                                    <td>
-                                                        <strong>{{ payer.payer_display_name }}</strong>
-                                                        <br>
-                                                        <small class="text-muted">{{ payer.payer_slug }}</small>
-                                                    </td>
-                                                    <td class="text-end">
-                                                        <span class="badge bg-primary">{{ payer.estimated_records|intcomma }}</span>
-                                                    </td>
-                                                    <td class="text-end">{{ payer.partition_count }}</td>
-                                                    <td class="text-end">{{ payer.file_size_mb }}</td>
-                                                    <td class="text-end">
-                                                        {% widthratio payer.estimated_records partition_summary.total_estimated_records 100 %}%
-                                                    </td>
-                                                </tr>
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
 
                     <!-- Available Filter Options -->
                     <div class="row">
@@ -552,56 +705,6 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Data Distribution Charts -->
-                    <div class="row mt-4">
-                        {% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-pie-chart text-primary me-1"></i>
-                                        Payer Records Distribution
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <canvas id="payerDistributionChart" width="400" height="200"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% if partition_summary.available_filters.procedure_set %}
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-pie-chart text-success me-1"></i>
-                                        Procedure Sets Distribution
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <canvas id="procedureSetChart" width="400" height="200"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% if partition_summary.available_filters.stat_area_name %}
-                    <div class="row mt-4">
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-bar-chart text-info me-1"></i>
-                                        Statistical Areas Distribution
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <canvas id="statAreaChart" width="400" height="200"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
 
                     <!-- Time Period Distribution -->
                     {% if partition_summary.available_filters.year or partition_summary.available_filters.month %}
@@ -654,22 +757,73 @@
 
 <script>
 $(document).ready(function() {
-    // Initialize Select2 for better UX
-    $('.form-select').select2({
+    // Initialize Select2 for single select dropdowns with enhanced search
+    $('.form-select:not(.select2-dropdown)').select2({
         theme: 'bootstrap-5',
         width: '100%',
         placeholder: function() {
             return $(this).find('option:first').text();
+        },
+        allowClear: true,
+        minimumResultsForSearch: 0, // Always show search box
+        dropdownCssClass: 'enhanced-dropdown',
+        language: {
+            noResults: function() {
+                return "No matching options found";
+            },
+            searching: function() {
+                return "Searching...";
+            },
+            inputTooShort: function() {
+                return "Type to search...";
+            }
         }
     });
     
-    // Initialize Select2 for multiple select dropdowns with special configuration
+    // Initialize Select2 for multiple select dropdowns (payer selection) with enhanced features
     $('.select2-dropdown').select2({
         theme: 'bootstrap-5',
         width: '100%',
-        placeholder: 'Select one or more options...',
+        placeholder: 'Type to search and select payers...',
         allowClear: true,
-        closeOnSelect: false
+        closeOnSelect: false,
+        minimumResultsForSearch: 0, // Always show search box
+        dropdownCssClass: 'enhanced-dropdown',
+        language: {
+            noResults: function() {
+                return "No matching payers found";
+            },
+            searching: function() {
+                return "Searching payers...";
+            },
+            inputTooShort: function() {
+                return "Type to search payers...";
+            },
+            maximumSelected: function(args) {
+                return "You can only select " + args.maximum + " items";
+            }
+        },
+        matcher: function(params, data) {
+            // Enhanced search functionality
+            if ($.trim(params.term) === '') {
+                return data;
+            }
+            
+            if (typeof data.text === 'undefined') {
+                return null;
+            }
+            
+            // Case-insensitive search
+            var searchTerm = params.term.toLowerCase();
+            var searchText = data.text.toLowerCase();
+            
+            // Search in both display name and slug
+            if (searchText.indexOf(searchTerm) > -1) {
+                return data;
+            }
+            
+            return null;
+        }
     });
     
     // Add form validation
@@ -706,164 +860,7 @@ $(document).ready(function() {
         }
     });
 
-    // Create charts if data is available
-    {% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
-    createPayerDistributionChart();
-    {% endif %}
-    
-    {% if partition_summary.available_filters.procedure_set %}
-    createProcedureSetChart();
-    {% endif %}
-    
-    {% if partition_summary.available_filters.stat_area_name %}
-    createStatAreaChart();
-    {% endif %}
 });
 
-{% if partition_summary.payer_breakdown and partition_summary.payer_breakdown|length > 1 %}
-function createPayerDistributionChart() {
-    const ctx = document.getElementById('payerDistributionChart').getContext('2d');
-    const payerData = {{ partition_summary.payer_breakdown|safe }};
-    
-    // Extract labels and data
-    const labels = payerData.map(payer => payer.payer_display_name);
-    const data = payerData.map(payer => payer.estimated_records);
-    
-    // Generate colors for each payer
-    const colors = [
-        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', 
-        '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384'
-    ];
-    
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: colors.slice(0, labels.length),
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 20,
-                        usePointStyle: true,
-                        font: {
-                            size: 12
-                        }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const payer = payerData[context.dataIndex];
-                            const percentage = ((payer.estimated_records / {{ partition_summary.total_estimated_records }}) * 100).toFixed(1);
-                            return `${context.label}: ${payer.estimated_records.toLocaleString()} records (${percentage}%)`;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-{% endif %}
-
-{% if partition_summary.available_filters.procedure_set %}
-function createProcedureSetChart() {
-    const ctx = document.getElementById('procedureSetChart').getContext('2d');
-    const data = {{ partition_summary.available_filters.procedure_set|safe }};
-    
-    // Create a simple count chart (since we don't have actual counts, we'll show equal distribution)
-    const labels = data;
-    const values = new Array(data.length).fill(1); // Equal distribution for now
-    
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: values,
-                backgroundColor: [
-                    '#FF6384',
-                    '#36A2EB',
-                    '#FFCE56',
-                    '#4BC0C0',
-                    '#9966FF',
-                    '#FF9F40'
-                ],
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        padding: 20,
-                        usePointStyle: true
-                    }
-                }
-            }
-        }
-    });
-}
-{% endif %}
-
-{% if partition_summary.available_filters.stat_area_name %}
-function createStatAreaChart() {
-    const ctx = document.getElementById('statAreaChart').getContext('2d');
-    const data = {{ partition_summary.available_filters.stat_area_name|safe }};
-    
-    // Show top 10 areas to avoid overcrowding
-    const topAreas = data.slice(0, 10);
-    const values = new Array(topAreas.length).fill(1);
-    
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: topAreas,
-            datasets: [{
-                label: 'Available Data',
-                data: values,
-                backgroundColor: '#36A2EB',
-                borderColor: '#36A2EB',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1
-                    }
-                },
-                x: {
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 45
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                }
-            }
-        }
-    });
-}
-{% endif %}
 </script>
 {% endblock %}
