@@ -2372,6 +2372,7 @@ def rate_lookup_data_explorer(request):
     """
     import random
     import sqlite3
+    from pathlib import Path
     
     context = {
         'search_results': None,
