@@ -1,0 +1,690 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Rate Analyzer - WorkComp Rates{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .stats-card {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 8px;
+    }
+    
+    .tin-card {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        transition: box-shadow 0.2s ease;
+        margin-bottom: 1.5rem;
+    }
+    
+    .tin-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+    }
+    
+    .distance-badge {
+        background: #007bff;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    
+    .s3-badge {
+        background: #28a745;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .no-s3-badge {
+        background: #dc3545;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .location-badge {
+        background: #6c757d;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin: 0.125rem;
+        display: inline-block;
+    }
+    
+    .npi-badge {
+        background: #6f42c1;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin: 0.125rem;
+        display: inline-block;
+    }
+    
+    .map-link {
+        color: #007bff;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .map-link:hover {
+        color: #0056b3;
+        text-decoration: underline;
+    }
+    
+    .search-form {
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+    }
+    
+    .form-control, .form-select {
+        border-radius: 4px;
+        border: 1px solid #ced4da;
+        background: #ffffff;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+     .btn-search {
+         background: #1e3a8a;
+         border: 1px solid #1e3a8a;
+         border-radius: 4px;
+         padding: 0.75rem 1.5rem;
+         font-weight: 500;
+         color: white;
+     }
+     
+     .btn-search:hover {
+         background: #1e40af;
+         border-color: #1e40af;
+         color: white;
+     }
+    
+    .results-header {
+        background: #007bff;
+        color: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 1rem;
+    }
+    
+    .stat-number {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .loading-modal {
+        background: rgba(0,0,0,0.8);
+        backdrop-filter: blur(5px);
+    }
+    
+    .loading-content {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        border: none;
+        color: white;
+    }
+    
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid rgba(255,255,255,0.3);
+        border-top: 4px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .progress-step {
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+    }
+    
+    .progress-step.active {
+        opacity: 1;
+        font-weight: 600;
+    }
+    
+    .progress-step.completed {
+        opacity: 0.8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'rate_lookup_home' %}">Rate Lookup</a></li>
+                    <li class="breadcrumb-item active">Analyze a Market</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Search Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card search-card">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-3">
+                                <i class="bi bi-geo-alt me-2"></i>Analyze a Healthcare Market
+                            </h2>
+                            <p class="mb-0 text-muted">
+                                Enter a zip code to find all healthcare organizations (TINs) within a specified radius and analyze their market rate data availability.
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <i class="bi bi-map text-muted" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                    
+                    <form method="post" class="search-form mt-4" id="marketSearchForm">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="zip_code" class="form-label">
+                                    <i class="bi bi-geo-alt me-2"></i>Zip Code
+                                </label>
+                                <input type="text" class="form-control" id="zip_code" name="zip_code" 
+                                       value="{{ zip_code }}" placeholder="Enter zip code (e.g., 30309)" required>
+                                <div class="form-text text-muted">
+                                    Enter a 5-digit zip code to analyze the surrounding healthcare market
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="radius_miles" class="form-label">
+                                    <i class="bi bi-rulers me-2"></i>Search Radius
+                                </label>
+                                <select class="form-select" id="radius_miles" name="radius_miles">
+                                    <option value="10" {% if radius_miles == 10 %}selected{% endif %}>10 miles</option>
+                                    <option value="25" {% if radius_miles == 25 %}selected{% endif %}>25 miles</option>
+                                    <option value="50" {% if radius_miles == 50 %}selected{% endif %}>50 miles</option>
+                                    <option value="100" {% if radius_miles == 100 %}selected{% endif %}>100 miles</option>
+                                </select>
+                                <div class="form-text text-muted">
+                                    Select the search radius for organizations
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Additional Filters -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-body">
+                                         <h6 class="mb-3 text-white" style="background: #1e3a8a; padding: 0.75rem; border-radius: 6px;">
+                                             <i class="bi bi-funnel me-2"></i>Additional Filters (Optional)
+                                         </h6>
+                                        <div class="row g-3">
+                                            <div class="col-md-3">
+                                                <label for="billing_class" class="form-label">Billing Class</label>
+                                                <select class="form-select" id="billing_class" name="billing_class">
+                                                    <option value="">All Classes</option>
+                                                    {% for billing_class in filter_options.billing_classes %}
+                                                    <option value="{{ billing_class }}" {% if request.POST.billing_class == billing_class %}selected{% endif %}>{{ billing_class|title }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label for="negotiation_arrangement" class="form-label">Negotiation Arrangement</label>
+                                                <select class="form-select" id="negotiation_arrangement" name="negotiation_arrangement">
+                                                    <option value="">All Arrangements</option>
+                                                    {% for arrangement in filter_options.negotiation_arrangements %}
+                                                    <option value="{{ arrangement }}" {% if request.POST.negotiation_arrangement == arrangement %}selected{% endif %}>{{ arrangement|title }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label for="negotiated_type" class="form-label">Negotiated Type</label>
+                                                <select class="form-select" id="negotiated_type" name="negotiated_type">
+                                                    <option value="">All Types</option>
+                                                    {% for negotiated_type in filter_options.negotiated_types %}
+                                                    <option value="{{ negotiated_type }}" {% if request.POST.negotiated_type == negotiated_type %}selected{% endif %}>{{ negotiated_type|title }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label for="proc_set" class="form-label">Procedure Set</label>
+                                                <select class="form-select" id="proc_set" name="proc_set">
+                                                    <option value="">All Sets</option>
+                                                    {% for proc_set in filter_options.proc_sets %}
+                                                    <option value="{{ proc_set }}" {% if request.POST.proc_set == proc_set %}selected{% endif %}>{{ proc_set }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="proc_class" class="form-label">Procedure Class</label>
+                                                <select class="form-select" id="proc_class" name="proc_class">
+                                                    <option value="">All Classes</option>
+                                                    {% for proc_class in filter_options.proc_classes %}
+                                                    <option value="{{ proc_class }}" {% if request.POST.proc_class == proc_class %}selected{% endif %}>{{ proc_class }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="proc_group" class="form-label">Procedure Group</label>
+                                                <select class="form-select" id="proc_group" name="proc_group">
+                                                    <option value="">All Groups</option>
+                                                    {% for proc_group in filter_options.proc_groups %}
+                                                    <option value="{{ proc_group }}" {% if request.POST.proc_group == proc_group %}selected{% endif %}>{{ proc_group }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="billing_code" class="form-label">Billing Code</label>
+                                                <select class="form-select" id="billing_code" name="billing_code">
+                                                    <option value="">All Codes</option>
+                                                    {% for billing_code in filter_options.billing_codes|slice:":100" %}
+                                                    <option value="{{ billing_code }}" {% if request.POST.billing_code == billing_code %}selected{% endif %}>{{ billing_code }}</option>
+                                                    {% endfor %}
+                                                    {% if filter_options.billing_codes|length > 100 %}
+                                                    <option value="" disabled>... and {{ filter_options.billing_codes|length|add:"-100" }} more codes</option>
+                                                    {% endif %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-text text-muted mt-3">
+                                            <i class="bi bi-info-circle me-1"></i>These filters will be applied when checking S3 data availability
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <div class="row mt-4">
+                            <div class="col-12 text-center">
+                                <button type="submit" class="btn btn-search btn-lg px-5" id="searchButton">
+                                    <i class="bi bi-search me-2"></i>Submit Search
+                                </button>
+                                <div class="form-text text-muted mt-2">
+                                    <i class="bi bi-clock me-1"></i>Analysis typically takes 30-60 seconds
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Message -->
+    {% if error_message %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Results -->
+    {% if market_data %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="results-header">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h3 class="mb-2">
+                            <i class="bi bi-geo-alt-fill me-2"></i>Market Analysis Results
+                        </h3>
+                        <p class="mb-0 opacity-75">
+                            <strong>Search Location:</strong> {{ market_data.search_location.zip_code }}
+                            ({{ market_data.search_location.latitude|floatformat:4 }}, {{ market_data.search_location.longitude|floatformat:4 }})
+                            • <strong>Radius:</strong> {{ market_data.radius_miles }} miles
+                            {% if filters %}
+                            • <strong>Filters Applied:</strong> {{ filters|length }} filter{{ filters|length|pluralize }}
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="distance-badge">
+                            {{ market_data.total_tins }} TINs Found
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Applied Filters -->
+    {% if filters %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-funnel me-2"></i>Applied Filters
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for key, value in filters.items %}
+                        <div class="col-md-3 mb-2">
+                            <span class="badge bg-primary me-1">
+                                {% if key == 'billing_class' %}Billing Class
+                                {% elif key == 'negotiation_arrangement' %}Negotiation Arrangement
+                                {% elif key == 'negotiated_type' %}Negotiated Type
+                                {% elif key == 'proc_set' %}Procedure Set
+                                {% elif key == 'proc_class' %}Procedure Class
+                                {% elif key == 'proc_group' %}Procedure Group
+                                {% elif key == 'billing_code' %}Billing Code
+                                {% else %}{{ key|title }}{% endif %}:
+                            </span>
+                            <span class="text-muted">{{ value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Market Statistics -->
+    {% if market_stats %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card stats-card">
+                <div class="card-body">
+                    <h5 class="mb-3">
+                        <i class="bi bi-graph-up me-2"></i>Market Statistics
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ market_stats.total_tins }}</div>
+                                <div class="stat-label">Total Organizations</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ market_stats.total_npis }}</div>
+                                <div class="stat-label">Total NPIs</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ market_stats.s3_data.tins_with_s3_data }}</div>
+                                <div class="stat-label">With S3 Data</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ market_stats.s3_data.total_s3_tiles }}</div>
+                                <div class="stat-label">Total S3 Tiles</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% if market_stats.distance_stats %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <small class="opacity-75">
+                                <strong>Distance Range:</strong> {{ market_stats.distance_stats.min_distance|floatformat:1 }} - 
+                                {{ market_stats.distance_stats.max_distance|floatformat:1 }} miles 
+                                (Avg: {{ market_stats.distance_stats.avg_distance|floatformat:1 }} miles)
+                            </small>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- TIN Results -->
+    <div class="row">
+        {% for tin in market_data.nearby_tins %}
+        <div class="col-lg-6 mb-4">
+            <div class="card tin-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-building me-2"></i>{{ tin.organization_name|default:"Unknown Organization" }}
+                        </h5>
+                        <div class="d-flex flex-column align-items-end">
+                            <span class="distance-badge mb-2">{{ tin.distance_miles }} miles</span>
+                            {% if tin.s3_availability.available %}
+                                <span class="s3-badge">
+                                    <i class="bi bi-check-circle me-1"></i>S3 Data Available
+                                </span>
+                            {% else %}
+                                <span class="no-s3-badge">
+                                    <i class="bi bi-x-circle me-1"></i>No S3 Data
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6 class="text-primary mb-2">
+                                <i class="bi bi-info-circle me-1"></i>Organization Details
+                            </h6>
+                            <ul class="list-unstyled small">
+                                <li><strong>TIN:</strong> {{ tin.tin_value }}</li>
+                                <li><strong>Address:</strong> 
+                                    {{ tin.address_1|default:"N/A" }}{% if tin.address_2 %}, {{ tin.address_2 }}{% endif %}<br>
+                                    {{ tin.city|default:"N/A" }}, {{ tin.state|default:"N/A" }} {{ tin.zip_norm|default:"N/A" }}
+                                </li>
+                                <li><strong>NPIs:</strong> {{ tin.support_npi_count|default:"N/A" }} 
+                                    {% if tin.primary_flag %}<span class="badge bg-success ms-1">Primary</span>{% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    {% if tin.s3_availability.available %}
+                    <div class="mb-3">
+                        <h6 class="text-success mb-2">
+                            <i class="bi bi-cloud-check me-1"></i>S3 Data Available
+                        </h6>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">
+                                    <strong>Tiles:</strong> {{ tin.s3_availability.total_tiles }}<br>
+                                    <strong>Rows:</strong> {{ tin.s3_availability.total_rows|floatformat:0 }}
+                                </small>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">
+                                    <strong>Latest:</strong> {{ tin.s3_availability.latest_data|default:"N/A" }}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            {% if tin.latitude and tin.longitude %}
+                            <a href="https://www.google.com/maps?q={{ tin.latitude }},{{ tin.longitude }}" 
+                               target="_blank" class="map-link">
+                                <i class="bi bi-geo-alt me-1"></i>View on Map
+                            </a>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <a href="{% url 'rate_lookup_tin_details' tin.tin_value %}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-eye me-1"></i>View Details
+                            </a>
+                        </div>
+                    </div>
+                    {% if tin.s3_availability.available %}
+                    <div class="mt-3">
+                        <a href="{% url 'rate_lookup_tin_details' tin.tin_value %}" class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-bar-chart-fill me-2"></i>View All Tiles for This TIN
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if market_data.nearby_tins|length == 0 %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-search text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3 text-muted">No Organizations Found</h4>
+                    <p class="text-muted">No healthcare organizations were found within {{ market_data.radius_miles }} miles of {{ market_data.search_location.zip_code }}.</p>
+                    <p class="text-muted">Try increasing the search radius or checking the zip code.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+    <!-- Back to Market Rate Lookup -->
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+             <a href="{% url 'rate_lookup_home' %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Rate Lookup
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade loading-modal" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content loading-content">
+            <div class="modal-body text-center py-5">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <h4 class="mb-4">Analyzing Healthcare Market...</h4>
+                <div class="progress-steps">
+                    <div class="progress-step mb-2" id="step1">
+                        <i class="bi bi-geo-alt me-2"></i>Geocoding your zip code...
+                    </div>
+                    <div class="progress-step mb-2" id="step2">
+                        <i class="bi bi-search me-2"></i>Finding nearby TINs within <span id="radiusDisplay">25</span> miles...
+                    </div>
+                    <div class="progress-step mb-2" id="step3">
+                        <i class="bi bi-cloud me-2"></i>Checking S3 data availability...
+                    </div>
+                    <div class="progress-step mb-2" id="step4">
+                        <i class="bi bi-graph-up me-2"></i>Calculating market statistics...
+                    </div>
+                    <div class="progress-step" id="step5">
+                        <i class="bi bi-check-circle me-2"></i>Preparing results...
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <small class="opacity-75">
+                        This may take 30-60 seconds depending on the search radius and number of organizations found.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('marketSearchForm');
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    const searchButton = document.getElementById('searchButton');
+    
+    // Update radius display
+    const radiusSelect = document.getElementById('radius_miles');
+    const radiusDisplay = document.getElementById('radiusDisplay');
+    
+    function updateRadiusDisplay() {
+        radiusDisplay.textContent = radiusSelect.value;
+    }
+    
+    radiusSelect.addEventListener('change', updateRadiusDisplay);
+    updateRadiusDisplay(); // Initial update
+    
+    form.addEventListener('submit', function(e) {
+        // Show loading modal
+        loadingModal.show();
+        
+        // Disable search button
+        searchButton.disabled = true;
+        searchButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Analyzing...';
+        
+        // Simulate progress steps
+        let currentStep = 1;
+        const totalSteps = 5;
+        
+        function updateProgress() {
+            // Mark previous steps as completed
+            for (let i = 1; i < currentStep; i++) {
+                const step = document.getElementById(`step${i}`);
+                step.classList.remove('active');
+                step.classList.add('completed');
+            }
+            
+            // Mark current step as active
+            if (currentStep <= totalSteps) {
+                const currentStepElement = document.getElementById(`step${currentStep}`);
+                currentStepElement.classList.add('active');
+                currentStepElement.classList.remove('completed');
+            }
+            
+            // Move to next step
+            currentStep++;
+            
+            if (currentStep <= totalSteps) {
+                // Random delay between 2-5 seconds for each step
+                const delay = Math.random() * 3000 + 2000;
+                setTimeout(updateProgress, delay);
+            }
+        }
+        
+        // Start progress simulation
+        setTimeout(updateProgress, 1000);
+    });
+});
+</script>
+{% endblock %}

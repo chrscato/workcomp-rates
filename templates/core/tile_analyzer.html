@@ -1,0 +1,914 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Tile Analyzer - WorkComp Rates{% endblock %}
+
+{% load custom_filters %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    .analyzer-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8);
+        backdrop-filter: blur(5px);
+        z-index: 9999;
+        display: none;
+    }
+    
+    .loading-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        text-align: center;
+        max-width: 400px;
+    }
+    
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .metrics-loading {
+        text-align: center;
+        padding: 3rem;
+    }
+    
+    .metrics-loading .spinner {
+        margin: 0 auto 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'rate_lookup_home' %}">Rate Lookup</a></li>
+                    <li class="breadcrumb-item active">Tile Analyzer</li>
+                </ol>
+            </nav>
+            <h1 class="display-6 fw-bold text-primary mb-3">
+                <i class="bi bi-bar-chart-fill me-3"></i>Tile Data Analyzer
+            </h1>
+            <p class="lead text-muted">
+                View data metrics and export tile data to CSV format for analysis in Excel, R, Python, or other tools.
+            </p>
+        </div>
+    </div>
+
+    <!-- Tile Information -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card analyzer-card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-info-circle me-2"></i>Tile Information
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>TIN Value:</strong> <span id="tinValue">{{ tin_value|default:"Not specified" }}</span></p>
+                            <p><strong>Payer:</strong> <span id="payerSlug">{{ payer_slug|default:"Not specified" }}</span></p>
+                            <p><strong>Billing Class:</strong> <span id="billingClass">{{ billing_class|default:"Not specified" }}</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Procedure Set:</strong> <span id="procSet">{{ proc_set|default:"Not specified" }}</span></p>
+                            <p><strong>Procedure Class:</strong> <span id="procClass">{{ proc_class|default:"Not specified" }}</span></p>
+                            <p><strong>Procedure Group:</strong> <span id="procGroup">{{ proc_group|default:"Not specified" }}</span></p>
+                        </div>
+                    </div>
+                    <!-- Hidden S3 Prefix for JavaScript access -->
+                    <input type="hidden" id="s3Prefix" value="{{ s3_prefix|default:"" }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tile Metrics -->
+    {% if metrics %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card analyzer-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Data Metrics
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Organization & Location Metrics -->
+                        <div class="col-md-4 mb-3">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-building me-2"></i>Organization & Location
+                            </h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-3">
+                                    <strong>Distinct Payers:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.payer_slug.count }}</span>
+                                    {% if metrics.payer_slug.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#payer-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="payer-values">
+                                        <div class="small">
+                                            {% for value in metrics.payer_slug.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Distinct TINs:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.tin_value.count }}</span>
+                                    {% if metrics.tin_value.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#tin-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="tin-values">
+                                        <div class="small">
+                                            {% for value in metrics.tin_value.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Distinct Organizations:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.tin_org_name.count }}</span>
+                                    {% if metrics.tin_org_name.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#org-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="org-values">
+                                        <div class="small">
+                                            {% for value in metrics.tin_org_name.values %}
+                                                <div class="mb-1">{{ value }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Distinct States:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.tin_state.count }}</span>
+                                    {% if metrics.tin_state.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#state-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="state-values">
+                                        <div class="small">
+                                            {% for value in metrics.tin_state.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Distinct Cities:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.tin_city.count }}</span>
+                                    {% if metrics.tin_city.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#city-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="city-values">
+                                        <div class="small">
+                                            {% for value in metrics.tin_city.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Distinct ZIP Codes:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.tin_zip.count }}</span>
+                                    {% if metrics.tin_zip.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#zip-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="zip-values">
+                                        <div class="small">
+                                            {% for value in metrics.tin_zip.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Distinct Addresses:</strong> 
+                                    <span class="badge bg-info ms-2">{{ metrics.tin_address.count }}</span>
+                                    {% if metrics.tin_address.values and metrics.tin_address.count <= 20 %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#address-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="address-values">
+                                        <div class="small">
+                                            {% for value in metrics.tin_address.values|slice:":20" %}
+                                                <div class="mb-1">{{ value }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Network & Negotiation Metrics -->
+                        <div class="col-md-4 mb-3">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-diagram-3 me-2"></i>Network & Negotiation
+                            </h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-3">
+                                    <strong>Network Patterns:</strong> 
+                                    <span class="badge bg-success ms-2">{{ metrics.network_pattern_id.count }}</span>
+                                    {% if metrics.network_pattern_id.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#network-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="network-values">
+                                        <div class="small">
+                                            {% for value in metrics.network_pattern_id.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Negotiation Arrangements:</strong> 
+                                    <span class="badge bg-success ms-2">{{ metrics.negotiation_arrangement.count }}</span>
+                                    {% if metrics.negotiation_arrangement.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#arrangement-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="arrangement-values">
+                                        <div class="small">
+                                            {% for value in metrics.negotiation_arrangement.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Negotiated Types:</strong> 
+                                    <span class="badge bg-success ms-2">{{ metrics.negotiated_type.count }}</span>
+                                    {% if metrics.negotiated_type.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#negtype-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="negtype-values">
+                                        <div class="small">
+                                            {% for value in metrics.negotiated_type.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Reporting Entity Types:</strong> 
+                                    <span class="badge bg-success ms-2">{{ metrics.reporting_entity_type.count }}</span>
+                                    {% if metrics.reporting_entity_type.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#entity-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="entity-values">
+                                        <div class="small">
+                                            {% for value in metrics.reporting_entity_type.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+
+                        <!-- Procedure & Provider Metrics -->
+                        <div class="col-md-4 mb-3">
+                            <h6 class="text-primary mb-3">
+                                <i class="bi bi-clipboard-data me-2"></i>Procedures & Providers
+                            </h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-3">
+                                    <strong>Procedure Sets:</strong> 
+                                    <span class="badge bg-warning ms-2">{{ metrics.proc_set.count }}</span>
+                                    {% if metrics.proc_set.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#procset-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="procset-values">
+                                        <div class="small">
+                                            {% for value in metrics.proc_set.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Procedure Classes:</strong> 
+                                    <span class="badge bg-warning ms-2">{{ metrics.proc_class.count }}</span>
+                                    {% if metrics.proc_class.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#procclass-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="procclass-values">
+                                        <div class="small">
+                                            {% for value in metrics.proc_class.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Procedure Groups:</strong> 
+                                    <span class="badge bg-warning ms-2">{{ metrics.proc_group.count }}</span>
+                                    {% if metrics.proc_group.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#procgroup-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="procgroup-values">
+                                        <div class="small">
+                                            {% for value in metrics.proc_group.values %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-3">
+                                    <strong>Unique NPIs:</strong> 
+                                    <span class="badge bg-purple ms-2" style="background: #6f42c1;">{{ metrics.npi.count }}</span>
+                                    {% if metrics.npi.values and metrics.npi.count <= 50 %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#npi-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="npi-values">
+                                        <div class="small">
+                                            {% for value in metrics.npi.values|slice:":50" %}
+                                                <span class="badge bg-secondary me-1 mb-1">{{ value }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                <li class="mb-2">
+                                    <strong>Unique Taxonomies:</strong> 
+                                    <span class="badge bg-purple ms-2" style="background: #6f42c1;">{{ metrics.primary_taxonomy_code.count }}</span>
+                                    {% if metrics.primary_taxonomy_code.values %}
+                                    <button class="btn btn-sm btn-link p-0 ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#taxonomy-values">
+                                        <i class="bi bi-chevron-down"></i> Hide
+                                    </button>
+                                    <div class="collapse show mt-2" id="taxonomy-values">
+                                        <div class="small">
+                                            {% for item in metrics.primary_taxonomy_code.values %}
+                                                <div class="mb-2">
+                                                    <span class="badge bg-secondary">{{ item.code }}</span>
+                                                    <span class="ms-2">{{ item.display_name }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif error_message %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Rate Comparison by Network Pattern -->
+    {% if chart_data %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Rate Analysis by Network Pattern:</strong> Found {{ chart_data|length }} network pattern{{ chart_data|length|pluralize }}. Showing negotiated rates vs Medicare benchmarks.
+            </div>
+        </div>
+    </div>
+    {% for network_id, network_data in chart_data.items %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card analyzer-card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-3 me-2"></i>Network Pattern ID: {{ network_id }}
+                        <span class="badge bg-light text-dark ms-3">{{ network_data.all_codes|length }} billing codes</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Billing Code Filter -->
+                    <div class="mb-4">
+                        <div class="row mb-2">
+                            <div class="col-12">
+                                <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#code-selector-net{{ forloop.counter }}">
+                                    <i class="bi bi-funnel me-2"></i>Filter & Select Codes
+                                    <span class="badge bg-primary ms-2" id="selected-count-net{{ forloop.counter }}">{{ network_data.top_codes|length }} selected</span>
+                                </button>
+                                <button class="btn btn-primary btn-sm ms-2" onclick="updateDisplay_net{{ forloop.counter }}()">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Update Chart & Table
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm ms-2" onclick="resetCodes_net{{ forloop.counter }}()">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Top 5
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="collapse" id="code-selector-net{{ forloop.counter }}">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="row mb-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label small"><strong>Filter by:</strong></label>
+                                            <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+                                                <input type="radio" class="btn-check" name="filter-type-net{{ forloop.counter }}" id="filter-code-net{{ forloop.counter }}" value="code" checked>
+                                                <label class="btn btn-outline-primary" for="filter-code-net{{ forloop.counter }}">Code</label>
+                                                
+                                                <input type="radio" class="btn-check" name="filter-type-net{{ forloop.counter }}" id="filter-name-net{{ forloop.counter }}" value="name">
+                                                <label class="btn btn-outline-primary" for="filter-name-net{{ forloop.counter }}">Name</label>
+                                            </div>
+                                            <input type="text" class="form-control form-control-sm" id="code-search-net{{ forloop.counter }}" 
+                                                   placeholder="Type to filter..." 
+                                                   onkeyup="filterCodes_net{{ forloop.counter }}()">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small"><strong>Quick Actions:</strong></label>
+                                            <div class="d-flex gap-2 flex-wrap">
+                                                <button class="btn btn-sm btn-outline-primary" onclick="selectAllVisible_net{{ forloop.counter }}()">
+                                                    <i class="bi bi-check-all me-1"></i>Select All Visible
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll_net{{ forloop.counter }}()">
+                                                    <i class="bi bi-x-square me-1"></i>Deselect All
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                                        <div id="code-checkboxes-net{{ forloop.counter }}">
+                                            {% for code in network_data.all_codes %}
+                                            <div class="form-check form-check-inline code-checkbox-item" style="width: 48%; margin-right: 2%;" data-code="{{ code }}" data-name="">
+                                                <input class="form-check-input code-checkbox-net{{ forloop.counter }}" 
+                                                       type="checkbox" 
+                                                       value="{{ code }}" 
+                                                       id="code-{{ forloop.parentloop.counter }}-{{ code }}"
+                                                       {% if code in network_data.top_codes %}checked{% endif %}
+                                                       onchange="updateSelectedCount_net{{ forloop.counter }}()">
+                                                <label class="form-check-label small" for="code-{{ forloop.parentloop.counter }}-{{ code }}">
+                                                    <strong>{{ code }}</strong>
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bar Chart -->
+                    <div class="mb-4">
+                        <h6 class="text-primary mb-3">
+                            <i class="bi bi-bar-chart-fill me-2"></i>Rate Comparison Chart
+                        </h6>
+                        <div style="position: relative; height: 400px;">
+                            <canvas id="chart-net{{ forloop.counter }}"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Data Table grouped by Taxonomy -->
+                    <div>
+                        <h6 class="text-primary mb-3">
+                            <i class="bi bi-table me-2"></i>Detailed Rate Data
+                        </h6>
+                        
+                        {% regroup network_data.data by taxonomy_display as taxonomy_groups %}
+                        {% for taxonomy_group in taxonomy_groups %}
+                        <div class="mb-4">
+                            <div class="alert alert-secondary">
+                                <i class="bi bi-tags me-2"></i><strong>Taxonomy:</strong> {{ taxonomy_group.grouper }}
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Billing Code</th>
+                                            <th>Description</th>
+                                            <th class="text-end">Negotiated Rate</th>
+                                            {% if billing_class == 'professional' %}
+                                            <th class="text-end">Prof Medicare</th>
+                                            <th class="text-end">% of Medicare</th>
+                                            {% elif billing_class == 'institutional' %}
+                                            <th class="text-end">ASC Medicare</th>
+                                            <th class="text-end">OPPS Medicare</th>
+                                            {% else %}
+                                            <th class="text-end">Prof Medicare</th>
+                                            <th class="text-end">ASC Medicare</th>
+                                            <th class="text-end">OPPS Medicare</th>
+                                            {% endif %}
+                                        </tr>
+                                    </thead>
+                                    <tbody class="table-body-net{{ forloop.parentloop.counter }}">
+                                        {% for item in taxonomy_group.list %}
+                                        <tr data-code="{{ item.billing_code }}">
+                                            <td><strong class="text-primary">{{ item.billing_code }}</strong></td>
+                                            <td><small class="text-muted">{{ item.name|default:"-" }}</small></td>
+                                            <td class="text-end">
+                                                {% if item.negotiated_rate %}
+                                                <strong>${{ item.negotiated_rate|floatformat:2 }}</strong>
+                                                {% else %}-{% endif %}
+                                            </td>
+                                            {% if billing_class == 'professional' %}
+                                            <td class="text-end">
+                                                {% if item.prof_medicare %}${{ item.prof_medicare|floatformat:2 }}{% else %}-{% endif %}
+                                            </td>
+                                            <td class="text-end">
+                                                {% if item.prof_medicare and item.negotiated_rate %}
+                                                <span class="badge {% if item.negotiated_rate > item.prof_medicare %}bg-success{% else %}bg-warning{% endif %}">
+                                                    {{ item.negotiated_rate|div:item.prof_medicare|mul:100|floatformat:0 }}%
+                                                </span>
+                                                {% else %}-{% endif %}
+                                            </td>
+                                            {% elif billing_class == 'institutional' %}
+                                            <td class="text-end">{% if item.asc_medicare %}${{ item.asc_medicare|floatformat:2 }}{% else %}-{% endif %}</td>
+                                            <td class="text-end">{% if item.opps_medicare %}${{ item.opps_medicare|floatformat:2 }}{% else %}-{% endif %}</td>
+                                            {% else %}
+                                            <td class="text-end">{% if item.prof_medicare %}${{ item.prof_medicare|floatformat:2 }}{% else %}-{% endif %}</td>
+                                            <td class="text-end">{% if item.asc_medicare %}${{ item.asc_medicare|floatformat:2 }}{% else %}-{% endif %}</td>
+                                            <td class="text-end">{% if item.opps_medicare %}${{ item.opps_medicare|floatformat:2 }}{% else %}-{% endif %}</td>
+                                            {% endif %}
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Chart Scripts -->
+    {% if chart_data %}
+    <script>
+    // Chart initialization for each network pattern
+    {% for network_id, network_data in chart_data.items %}
+    (function() {
+        const networkCounter = {{ forloop.counter }};
+        const billingClass = '{{ billing_class }}';
+        
+        // Chart data
+        const allData = {{ network_data.data|to_json|safe }};
+        const topCodes = {{ network_data.top_codes|to_json|safe }};
+        
+        // Build code-name mapping from data
+        const codeNameMap = {};
+        allData.forEach(item => {
+            if (!codeNameMap[item.billing_code] && item.name) {
+                codeNameMap[item.billing_code] = item.name;
+            }
+        });
+        
+        // Update checkbox labels with names
+        Object.keys(codeNameMap).forEach(code => {
+            const checkbox = document.getElementById('code-checkboxes-net' + networkCounter);
+            if (checkbox) {
+                const items = checkbox.querySelectorAll('.code-checkbox-item');
+                items.forEach(item => {
+                    if (item.getAttribute('data-code') === code) {
+                        item.setAttribute('data-name', codeNameMap[code] || '');
+                        const label = item.querySelector('label');
+                        if (codeNameMap[code]) {
+                            label.innerHTML = '<strong>' + code + '</strong><br><small class="text-muted">' + codeNameMap[code] + '</small>';
+                        }
+                    }
+                });
+            }
+        });
+        
+        let chartInstance = null;
+        
+        function createChart(selectedCodes) {
+            const ctx = document.getElementById('chart-net' + networkCounter);
+            if (!ctx) return;
+            
+            // Filter data by selected codes
+            const filteredData = allData.filter(item => selectedCodes.includes(item.billing_code));
+            
+            if (filteredData.length === 0) {
+                ctx.parentElement.innerHTML = '<div class="alert alert-warning">No data for selected codes</div>';
+                return;
+            }
+            
+            // Create simple labels (just billing_code, no taxonomy)
+            const labels = filteredData.map(item => item.billing_code);
+            
+            // Build datasets
+            const datasets = [];
+            
+            // Negotiated Rate
+            datasets.push({
+                label: 'Negotiated Rate',
+                data: filteredData.map(item => item.negotiated_rate),
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 2
+            });
+            
+            // Medicare benchmarks
+            if (billingClass === 'professional' || billingClass === '') {
+                const profData = filteredData.map(item => item.prof_medicare);
+                if (profData.some(v => v !== null && v !== undefined)) {
+                    datasets.push({
+                        label: 'Professional Medicare',
+                        data: profData,
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2
+                    });
+                }
+            }
+            
+            if (billingClass === 'institutional' || billingClass === '') {
+                const ascData = filteredData.map(item => item.asc_medicare);
+                if (ascData.some(v => v !== null && v !== undefined)) {
+                    datasets.push({
+                        label: 'ASC Medicare',
+                        data: ascData,
+                        backgroundColor: 'rgba(255, 206, 86, 0.8)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 2
+                    });
+                }
+                
+                const oppsData = filteredData.map(item => item.opps_medicare);
+                if (oppsData.some(v => v !== null && v !== undefined)) {
+                    datasets.push({
+                        label: 'OPPS Medicare',
+                        data: oppsData,
+                        backgroundColor: 'rgba(153, 102, 255, 0.8)',
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 2
+                    });
+                }
+            }
+            
+            // Destroy existing chart
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+            
+            // Create chart
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: value => '$' + value.toFixed(2)
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: {
+                            display: true,
+                            text: 'Negotiated Rates vs Medicare Benchmarks',
+                            font: { size: 16 }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: context => {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed.y !== null) {
+                                        label += '$' + context.parsed.y.toFixed(2);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Update table visibility
+            const tableRows = document.querySelectorAll('.table-body-net' + networkCounter + ' tr');
+            tableRows.forEach(row => {
+                const code = row.getAttribute('data-code');
+                row.style.display = selectedCodes.includes(code) ? '' : 'none';
+            });
+        }
+        
+        // Update selected count badge
+        window['updateSelectedCount_net' + networkCounter] = function() {
+            const checkboxes = document.querySelectorAll('.code-checkbox-net' + networkCounter + ':checked');
+            document.getElementById('selected-count-net' + networkCounter).textContent = checkboxes.length + ' selected';
+        };
+        
+        // Filter codes function
+        window['filterCodes_net' + networkCounter] = function() {
+            const searchText = document.getElementById('code-search-net' + networkCounter).value.toLowerCase();
+            const filterType = document.querySelector('input[name="filter-type-net' + networkCounter + '"]:checked').value;
+            const checkboxItems = document.querySelectorAll('#code-checkboxes-net' + networkCounter + ' .code-checkbox-item');
+            
+            let visibleCount = 0;
+            checkboxItems.forEach(item => {
+                let searchableText = '';
+                if (filterType === 'code') {
+                    searchableText = item.getAttribute('data-code').toLowerCase();
+                } else {
+                    searchableText = item.getAttribute('data-name').toLowerCase();
+                }
+                const isVisible = searchableText.includes(searchText);
+                item.style.display = isVisible ? 'inline-block' : 'none';
+                if (isVisible) visibleCount++;
+            });
+        };
+        
+        // Select all visible codes
+        window['selectAllVisible_net' + networkCounter] = function() {
+            const checkboxItems = document.querySelectorAll('#code-checkboxes-net' + networkCounter + ' .code-checkbox-item');
+            checkboxItems.forEach(item => {
+                if (item.style.display !== 'none') {
+                    item.querySelector('input').checked = true;
+                }
+            });
+        };
+        
+        // Deselect all codes
+        window['deselectAll_net' + networkCounter] = function() {
+            const checkboxes = document.querySelectorAll('.code-checkbox-net' + networkCounter);
+            checkboxes.forEach(cb => cb.checked = false);
+        };
+        
+        // Update function
+        window['updateDisplay_net' + networkCounter] = function() {
+            const checkboxes = document.querySelectorAll('.code-checkbox-net' + networkCounter + ':checked');
+            const selected = Array.from(checkboxes).map(cb => cb.value);
+            if (selected.length > 0) {
+                createChart(selected);
+            } else {
+                alert('Please select at least one billing code');
+            }
+        };
+        
+        // Reset function
+        window['resetCodes_net' + networkCounter] = function() {
+            const checkboxes = document.querySelectorAll('.code-checkbox-net' + networkCounter);
+            checkboxes.forEach(cb => {
+                cb.checked = topCodes.includes(cb.value);
+            });
+            // Clear search
+            document.getElementById('code-search-net' + networkCounter).value = '';
+            window['filterCodes_net' + networkCounter]();
+            window['updateSelectedCount_net' + networkCounter]();
+            createChart(topCodes);
+        };
+        
+        // Initialize
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                createChart(topCodes);
+                window['updateSelectedCount_net' + networkCounter]();
+            });
+        } else {
+            createChart(topCodes);
+            window['updateSelectedCount_net' + networkCounter]();
+        }
+    })();
+    {% endfor %}
+    </script>
+    {% endif %}
+
+    <!-- Download Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card analyzer-card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-download" style="font-size: 4rem; color: #007bff;"></i>
+                    <h3 class="mt-4 mb-3">Download Tile Data</h3>
+                    <p class="text-muted mb-4">
+                        Download the complete data for this tile as a CSV file for analysis in Excel or other tools.
+                    </p>
+                    <button id="downloadCsvBtn" class="btn btn-primary btn-lg px-5">
+                        <i class="bi bi-file-earmark-arrow-down me-2"></i>Download as CSV
+                        </button>
+                    <p class="text-muted mt-3 small">
+                        <i class="bi bi-info-circle me-1"></i>Limited to 100,000 rows
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="spinner"></div>
+        <h4>Preparing Your Download...</h4>
+        <p class="mb-0">Fetching data from S3 and preparing CSV file.</p>
+        <div class="progress mt-3" style="height: 6px;">
+            <div class="progress-bar" role="progressbar" id="progressBar" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const downloadBtn = document.getElementById('downloadCsvBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const progressBar = document.getElementById('progressBar');
+    const s3Prefix = document.getElementById('s3Prefix').value;
+    
+    downloadBtn.addEventListener('click', function() {
+        if (!s3Prefix) {
+            alert('No S3 prefix available for download');
+            return;
+        }
+        
+        // Show loading overlay
+        loadingOverlay.style.display = 'block';
+        progressBar.style.width = '50%';
+        
+        // Build download URL with all parameters
+        const params = new URLSearchParams(window.location.search);
+        const downloadUrl = '{% url "tile_analyzer_download_csv" %}?' + params.toString();
+        
+        // Create a temporary link and trigger download
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Hide loading overlay after a short delay
+        setTimeout(() => {
+            progressBar.style.width = '100%';
+            setTimeout(() => {
+                loadingOverlay.style.display = 'none';
+                progressBar.style.width = '0%';
+            }, 500);
+        }, 1000);
+    });
+});
+</script>
+{% endblock %}

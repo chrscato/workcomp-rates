@@ -320,13 +320,13 @@ class PartitionNavigator:
         # Get unique combinations for batch processing
         unique_combinations = set()
         
-        # Professional rate combinations (code + zip)
-        if 'code' in df.columns and 'zip_code_5dig' in df.columns:
-            prof_combinations = df[['code', 'zip_code_5dig']].dropna()
+        # Professional rate combinations (code + state) - using state averages instead of ZIP-specific
+        if 'code' in df.columns and 'state' in df.columns:
+            prof_combinations = df[['code', 'state']].dropna()
             prof_combinations = prof_combinations.drop_duplicates()
             for _, row in prof_combinations.iterrows():
-                if row['zip_code_5dig']:
-                    unique_combinations.add(('prof', row['code'], row['zip_code_5dig']))
+                if row['state']:
+                    unique_combinations.add(('prof', row['code'], row['state']))
         
         # Institutional rate combinations (code + state)
         if 'code' in df.columns and 'state' in df.columns:
@@ -345,7 +345,8 @@ class PartitionNavigator:
         for combo_type, code, location in unique_combinations:
             try:
                 if combo_type == 'prof':
-                    rate = self.medicare_lookup.get_professional_rate(code, location)
+                    # Use state average instead of ZIP-specific rate
+                    rate = self.medicare_lookup.get_professional_rate_state_avg(code, location)
                     prof_rates_cache[(code, location)] = rate
                 elif combo_type == 'inst':
                     rates = self.medicare_lookup.get_institutional_rates(code, location)
@@ -359,9 +360,9 @@ class PartitionNavigator:
         
         # Apply cached rates to DataFrame
         def get_prof_rate(row):
-            if pd.isna(row['code']) or pd.isna(row['zip_code_5dig']):
+            if pd.isna(row['code']) or pd.isna(row['state']):
                 return None
-            return prof_rates_cache.get((row['code'], row['zip_code_5dig']), None)
+            return prof_rates_cache.get((row['code'], row['state']), None)
         
         def get_inst_rates(row):
             if pd.isna(row['code']) or pd.isna(row['state']):

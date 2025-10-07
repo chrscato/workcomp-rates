@@ -31,6 +31,7 @@
                     <ul class="navbar-nav ms-auto">
                         {% if user.is_authenticated %}
                             <!-- Main Tools -->
+                            <!-- Hidden per user request
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'dashboard' %}">
                                     <i class="bi bi-graph-up-arrow text-success me-1"></i>Transparency Dashboard
@@ -42,8 +43,16 @@
                                     <i class="bi bi-search-heart text-primary me-1"></i>TIN & Provider Lookup
                                 </a>
                             </li>
+                            -->
+                            
+                            <li class="nav-item">
+                                <a class="nav-link" href="{% url 'rate_lookup_home' %}">
+                                    <i class="bi bi-graph-up-arrow text-success me-1"></i>Rate Lookup
+                                </a>
+                            </li>
                             
                             <!-- WorkComp Rates Features Dropdown -->
+                            <!-- Hidden per user request
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-tools text-primary me-1"></i>WorkComp Tools
@@ -61,12 +70,15 @@
                                     </a></li>
                                 </ul>
                             </li>
+                            -->
                             
+                            <!-- Hidden per user request
                             <li class="nav-item">
                                 <a class="nav-link" href="{% url 'data_availability_overview' %}">
                                     <i class="bi bi-database text-info me-1"></i>Data Availability
                                 </a>
                             </li>
+                            -->
                             
                             <!-- User Menu -->
                             <li class="nav-item dropdown">

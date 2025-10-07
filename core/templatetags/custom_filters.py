@@ -77,3 +77,9 @@ def is_list(value):
 def is_multiple_values(value):
     """Check if value is a list with multiple items"""
     return isinstance(value, list) and len(value) > 1
+
+@register.filter
+def to_json(value):
+    """Convert Python object to JSON string"""
+    import json
+    return json.dumps(value)

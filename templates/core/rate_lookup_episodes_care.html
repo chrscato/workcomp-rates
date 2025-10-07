@@ -1,0 +1,534 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Episodes of Care - Market Rate Lookup{% endblock %}
+
+{% block extra_head %}
+<style>
+    .episode-card {
+        border-radius: 15px;
+        border: none;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        cursor: pointer;
+    }
+    
+    .episode-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    .episode-card.selected {
+        border: 3px solid #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    }
+    
+    .episode-type-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: bold;
+        color: white;
+    }
+    
+    .episode-type-badge.emg {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    }
+    
+    .episode-type-badge.imaging {
+        background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
+    }
+    
+    .episode-type-badge.msk {
+        background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%);
+    }
+    
+    .code-badge {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 0.25rem 0.5rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        margin: 0.125rem;
+        display: inline-block;
+    }
+    
+    .code-badge.required {
+        background: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+    }
+    
+    .code-badge.optional {
+        background: #fff3cd;
+        border-color: #ffeaa7;
+        color: #856404;
+    }
+    
+    .search-result-card {
+        border-left: 4px solid #28a745;
+        background: #f8f9fa;
+        border-radius: 10px;
+    }
+    
+    .nav-pills .nav-link {
+        border-radius: 25px;
+        margin: 0 5px;
+        transition: all 0.3s ease;
+    }
+    
+    .nav-pills .nav-link.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'rate_lookup_home' %}">Rate Lookup</a></li>
+                    <li class="breadcrumb-item active">Episodes of Care</li>
+                </ol>
+            </nav>
+            <h1 class="display-6 fw-bold text-primary mb-3">
+                <i class="bi bi-heart-pulse me-3"></i>Episodes of Care / Cost Bundles
+            </h1>
+            <p class="lead text-muted">
+                Explore predefined episode templates for EMG, Imaging, and MSK procedures with associated cost bundles.
+            </p>
+        </div>
+    </div>
+
+    <!-- Episode Type Navigation -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <ul class="nav nav-pills justify-content-center" id="episodeTypeTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all" type="button" role="tab">
+                        <i class="bi bi-grid-3x3-gap me-2"></i>All Episodes
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="emg-tab" data-bs-toggle="pill" data-bs-target="#emg" type="button" role="tab">
+                        <i class="bi bi-heart-pulse me-2"></i>EMG ({{ episode_templates.emg|length }})
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="imaging-tab" data-bs-toggle="pill" data-bs-target="#imaging" type="button" role="tab">
+                        <i class="bi bi-camera me-2"></i>Imaging ({{ episode_templates.imaging|length }})
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="msk-tab" data-bs-toggle="pill" data-bs-target="#msk" type="button" role="tab">
+                        <i class="bi bi-activity me-2"></i>MSK ({{ episode_templates.msk|length }})
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Episode Selection Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-search me-2"></i>Select Episode for Market Rate Analysis
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="episodeForm">
+                        {% csrf_token %}
+                        <input type="hidden" id="selected_episode_id" name="episode_id">
+                        <input type="hidden" id="selected_episode_type" name="episode_type">
+                        
+                        <div class="tab-content" id="episodeTypeTabsContent">
+                            <!-- All Episodes -->
+                            <div class="tab-pane fade show active" id="all" role="tabpanel">
+                                <div class="row">
+                                    {% for episode_type, episodes in episode_templates.items %}
+                                        {% for episode in episodes %}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card episode-card" 
+                                                 data-episode-id="{{ episode.episode_id }}" 
+                                                 data-episode-type="{{ episode_type }}">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <h6 class="card-title mb-0">{{ episode.episode_name }}</h6>
+                                                        <span class="episode-type-badge {{ episode_type }}">{{ episode_type|upper }}</span>
+                                                    </div>
+                                                    <p class="card-text small text-muted">
+                                                        {% if episode.type == 'emg' %}
+                                                            {{ episode.clinical_intent|default:"No description available" }}
+                                                        {% elif episode.type == 'imaging' %}
+                                                            {{ episode.body_region|default:"No description available" }}
+                                                        {% elif episode.type == 'msk' %}
+                                                            {{ episode.body_region|default:"No description available" }}
+                                                        {% else %}
+                                                            No description available
+                                                        {% endif %}
+                                                    </p>
+                                                    
+                                                    {% if episode.codes_required or episode.codes_optional or episode.codes %}
+                                                    <div class="mt-2">
+                                                        <small class="text-muted"><strong>Codes:</strong></small>
+                                                        <div class="mt-1">
+                                                            {% for code in episode.codes_required|slice:":5" %}
+                                                                <span class="code-badge required">{{ code }}</span>
+                                                            {% endfor %}
+                                                            {% for code in episode.codes_optional|slice:":3" %}
+                                                                <span class="code-badge optional">{{ code }}</span>
+                                                            {% endfor %}
+                                                            {% for code in episode.codes|slice:":3" %}
+                                                                <span class="code-badge">{{ code }}</span>
+                                                            {% endfor %}
+                                                            {% if episode.codes_required|length > 5 or episode.codes_optional|length > 3 or episode.codes|length > 3 %}
+                                                                <span class="text-muted small">+more</span>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    
+                                                    {% if episode.selection_rules %}
+                                                    <div class="mt-2">
+                                                        <small class="text-info">
+                                                            <i class="bi bi-info-circle me-1"></i>
+                                                            {{ episode.selection_rules|truncatechars:100 }}
+                                                        </small>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <!-- EMG Episodes -->
+                            <div class="tab-pane fade" id="emg" role="tabpanel">
+                                <div class="row">
+                                    {% for episode in episode_templates.emg %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card episode-card" 
+                                             data-episode-id="{{ episode.episode_id }}" 
+                                             data-episode-type="emg">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <h6 class="card-title mb-0">{{ episode.episode_name }}</h6>
+                                                    <span class="episode-type-badge emg">EMG</span>
+                                                </div>
+                                                <p class="card-text small text-muted">{{ episode.clinical_intent|default:"No description available" }}</p>
+                                                
+                                                {% if episode.codes_required or episode.codes_optional %}
+                                                <div class="mt-2">
+                                                    <small class="text-muted"><strong>Codes:</strong></small>
+                                                    <div class="mt-1">
+                                                        {% for code in episode.codes_required|slice:":5" %}
+                                                            <span class="code-badge required">{{ code }}</span>
+                                                        {% endfor %}
+                                                        {% for code in episode.codes_optional|slice:":3" %}
+                                                            <span class="code-badge optional">{{ code }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <!-- Imaging Episodes -->
+                            <div class="tab-pane fade" id="imaging" role="tabpanel">
+                                <div class="row">
+                                    {% for episode in episode_templates.imaging %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card episode-card" 
+                                             data-episode-id="{{ episode.episode_id }}" 
+                                             data-episode-type="imaging">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <h6 class="card-title mb-0">{{ episode.episode_name }}</h6>
+                                                    <span class="episode-type-badge imaging">IMAGING</span>
+                                                </div>
+                                                <p class="card-text small text-muted">
+                                                    {% if episode.body_region and episode.modality %}
+                                                        {{ episode.body_region }} - {{ episode.modality }}
+                                                    {% elif episode.body_region %}
+                                                        {{ episode.body_region }}
+                                                    {% elif episode.modality %}
+                                                        {{ episode.modality }}
+                                                    {% else %}
+                                                        No description available
+                                                    {% endif %}
+                                                </p>
+                                                
+                                                {% if episode.codes %}
+                                                <div class="mt-2">
+                                                    <small class="text-muted"><strong>Codes:</strong></small>
+                                                    <div class="mt-1">
+                                                        {% for code in episode.codes|slice:":5" %}
+                                                            <span class="code-badge">{{ code }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <!-- MSK Episodes -->
+                            <div class="tab-pane fade" id="msk" role="tabpanel">
+                                <div class="row">
+                                    {% for episode in episode_templates.msk %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card episode-card" 
+                                             data-episode-id="{{ episode.episode_id }}" 
+                                             data-episode-type="msk">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <h6 class="card-title mb-0">{{ episode.episode_name }}</h6>
+                                                    <span class="episode-type-badge msk">MSK</span>
+                                                </div>
+                                                <p class="card-text small text-muted">
+                                                    {% if episode.body_region and episode.typical_setting %}
+                                                        {{ episode.body_region }} - {{ episode.typical_setting }}
+                                                    {% elif episode.body_region %}
+                                                        {{ episode.body_region }}
+                                                    {% elif episode.typical_setting %}
+                                                        {{ episode.typical_setting }}
+                                                    {% else %}
+                                                        No description available
+                                                    {% endif %}
+                                                </p>
+                                                
+                                                {% if episode.codes_required or episode.codes_optional %}
+                                                <div class="mt-2">
+                                                    <small class="text-muted"><strong>Codes:</strong></small>
+                                                    <div class="mt-1">
+                                                        {% for code in episode.codes_required|slice:":5" %}
+                                                            <span class="code-badge required">{{ code }}</span>
+                                                        {% endfor %}
+                                                        {% for code in episode.codes_optional|slice:":3" %}
+                                                            <span class="code-badge optional">{{ code }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg" id="analyzeButton" disabled>
+                                <i class="bi bi-search me-2"></i>Analyze Market Rates
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selected Episode Details -->
+    {% if selected_episode %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>Selected Episode: {{ selected_episode.episode_name }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h6 class="text-primary">Episode Details</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>Type:</strong> <span class="episode-type-badge {{ selected_episode.type }}">{{ selected_episode.type|upper }}</span></li>
+                                {% if selected_episode.clinical_intent %}
+                                <li><strong>Clinical Intent:</strong> {{ selected_episode.clinical_intent }}</li>
+                                {% endif %}
+                                {% if selected_episode.body_region %}
+                                <li><strong>Body Region:</strong> {{ selected_episode.body_region }}</li>
+                                {% endif %}
+                                {% if selected_episode.modality %}
+                                <li><strong>Modality:</strong> {{ selected_episode.modality }}</li>
+                                {% endif %}
+                                {% if selected_episode.typical_setting %}
+                                <li><strong>Typical Setting:</strong> {{ selected_episode.typical_setting }}</li>
+                                {% endif %}
+                            </ul>
+                            
+                            {% if selected_episode.selection_rules %}
+                            <h6 class="text-primary mt-3">Selection Rules</h6>
+                            <p class="text-muted">{{ selected_episode.selection_rules }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-primary">Associated Codes</h6>
+                            {% if selected_codes %}
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for code in selected_codes %}
+                                <span class="badge bg-primary">{{ code }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search Results -->
+    {% if search_results %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <h4 class="fw-bold text-primary mb-3">
+                <i class="bi bi-list-ul me-2"></i>Market Rate Data Available
+                <span class="badge bg-success ms-2">{{ search_results|length }} tile{{ search_results|length|pluralize }}</span>
+            </h4>
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Found {{ search_results|length }} matching tile{{ search_results|length|pluralize }}!</strong> 
+                Click "Analyze This Tile" on any result below to view detailed rate data and export to CSV.
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for result in search_results %}
+        <div class="col-md-6 mb-3">
+            <div class="card search-result-card">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-cloud me-2"></i>{{ result.payer_slug }}
+                        <span class="badge bg-success float-end">{{ result.row_count|floatformat:0 }} rows</span>
+                    </h6>
+                    <ul class="list-unstyled small">
+                        <li><strong>Billing Class:</strong> {{ result.billing_class }}</li>
+                        <li><strong>Procedure Set:</strong> {{ result.proc_set }}</li>
+                        <li><strong>Procedure Class:</strong> {{ result.proc_class }}</li>
+                        <li><strong>Procedure Group:</strong> {{ result.proc_group }}</li>
+                        <li><strong>Negotiation:</strong> {{ result.negotiated_type }}</li>
+                        <li><strong>Created:</strong> {{ result.created_at_utc }}</li>
+                    </ul>
+                    
+                    {% if result.billing_codes_json %}
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <strong>Available Codes:</strong> 
+                            {% for code in result.billing_codes_json|slice:":8" %}
+                                <span class="badge bg-secondary me-1">{{ code }}</span>
+                            {% endfor %}
+                            {% if result.billing_codes_json|length > 8 %}
+                                <span class="text-muted">+{{ result.billing_codes_json|length|add:"-8" }} more</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if result.taxonomy_display_names %}
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <strong>Taxonomies:</strong> 
+                            {% for display_name in result.taxonomy_display_names|slice:":3" %}
+                                <span class="badge bg-info me-1">{{ display_name }}</span>
+                            {% endfor %}
+                            {% if result.taxonomy_display_names|length > 3 %}
+                                <span class="text-muted">+{{ result.taxonomy_display_names|length|add:"-3" }} more</span>
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-3 text-center">
+                        <a href="{% url 'tile_analyzer' %}?s3_prefix={{ result.s3_prefix|urlencode }}&tin_value={{ result.tin_value }}&payer_slug={{ result.payer_slug|urlencode }}&billing_class={{ result.billing_class|urlencode }}&proc_set={{ result.proc_set|urlencode }}&proc_class={{ result.proc_class|urlencode }}&proc_group={{ result.proc_group|urlencode }}" 
+                           class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-bar-chart-fill me-2"></i>Analyze This Tile
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error_message %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let selectedEpisode = null;
+        let selectedType = null;
+        
+        // Episode card selection
+        document.querySelectorAll('.episode-card').forEach(card => {
+            card.addEventListener('click', function() {
+                // Remove previous selection
+                document.querySelectorAll('.episode-card').forEach(c => c.classList.remove('selected'));
+                
+                // Add selection to clicked card
+                this.classList.add('selected');
+                
+                // Update form fields
+                selectedEpisode = this.dataset.episodeId;
+                selectedType = this.dataset.episodeType;
+                
+                document.getElementById('selected_episode_id').value = selectedEpisode;
+                document.getElementById('selected_episode_type').value = selectedType;
+                
+                // Enable analyze button
+                document.getElementById('analyzeButton').disabled = false;
+            });
+        });
+        
+        // Form submission
+        document.getElementById('episodeForm').addEventListener('submit', function(e) {
+            if (!selectedEpisode || !selectedType) {
+                e.preventDefault();
+                alert('Please select an episode first.');
+                return;
+            }
+        });
+        
+        // Tab switching
+        document.querySelectorAll('[data-bs-toggle="pill"]').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function() {
+                // Clear selection when switching tabs
+                document.querySelectorAll('.episode-card').forEach(c => c.classList.remove('selected'));
+                document.getElementById('analyzeButton').disabled = true;
+                selectedEpisode = null;
+                selectedType = null;
+            });
+        });
+    });
+</script>
+{% endblock %}

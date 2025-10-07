@@ -1,0 +1,649 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}TIN Details - {{ tin_value }} - Market Rate Lookup{% endblock %}
+
+{% block extra_head %}
+<style>
+    .detail-card {
+        border-radius: 15px;
+        border: none;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    }
+    
+    .tin-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px 15px 0 0;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .s3-tile-card {
+        border-left: 4px solid #28a745;
+        background: #f8f9fa;
+        border-radius: 10px;
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    .s3-tile-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .s3-tile-card.unavailable {
+        border-left-color: #dc3545;
+        background: #fff5f5;
+    }
+    
+    .stat-badge {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: bold;
+        font-size: 0.875rem;
+    }
+    
+    .info-badge {
+        background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.875rem;
+        margin: 0.125rem;
+        display: inline-block;
+    }
+    
+    .coordinate-badge {
+        background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.875rem;
+        font-family: monospace;
+    }
+    
+    .npi-badge {
+        background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.875rem;
+        margin: 0.125rem;
+        display: inline-block;
+    }
+    
+    .data-summary {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        padding: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'rate_lookup_home' %}">Rate Lookup</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'rate_lookup_tin_lookup' %}">TIN Lookup</a></li>
+                    <li class="breadcrumb-item active">{{ tin_value }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- TIN Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card detail-card">
+                <div class="tin-header">
+                    <h1 class="display-6 fw-bold mb-2">
+                        <i class="bi bi-building me-3"></i>{{ tin_data.organization_name|default:"Unknown Organization" }}
+                    </h1>
+                    <div class="stat-badge d-inline-block">
+                        TIN: {{ tin_value }}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="text-primary mb-3">
+                                <i class="bi bi-info-circle me-2"></i>Organization Information
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <strong>Organization Name:</strong><br>
+                                            <span class="text-muted">{{ tin_data.organization_name|default:"N/A" }}</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Primary Address:</strong><br>
+                                            <span class="text-muted">
+                                                {{ tin_data.address_1|default:"N/A" }}<br>
+                                                {% if tin_data.address_2 %}{{ tin_data.address_2 }}<br>{% endif %}
+                                                {{ tin_data.city|default:"N/A" }}, {{ tin_data.state|default:"N/A" }} {{ tin_data.zip_norm|default:"N/A" }}
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <strong>NPI Count:</strong><br>
+                                            <span class="info-badge">{{ tin_data.support_npi_count|default:"N/A" }} NPIs</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Primary Location:</strong><br>
+                                            {% if tin_data.primary_flag %}
+                                                <span class="badge bg-success">Yes</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">No</span>
+                                            {% endif %}
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Primary Basis:</strong><br>
+                                            <span class="text-muted">{{ tin_data.primary_basis|default:"N/A" }}</span>
+                                        </li>
+                                        <li class="mb-2">
+                                            <strong>Last Updated:</strong><br>
+                                            <span class="text-muted">{{ tin_data.last_updated|default:"N/A" }}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            {% if tin_data.latitude and tin_data.longitude %}
+                            <h5 class="text-primary mb-3">
+                                <i class="bi bi-geo-alt me-2"></i>Coordinates
+                            </h5>
+                            <div class="coordinate-badge d-block text-center mb-3">
+                                <div class="small">Latitude</div>
+                                <div class="fw-bold">{{ tin_data.latitude }}</div>
+                            </div>
+                            <div class="coordinate-badge d-block text-center mb-3">
+                                <div class="small">Longitude</div>
+                                <div class="fw-bold">{{ tin_data.longitude }}</div>
+                            </div>
+                            <div class="text-center">
+                                <button class="btn btn-outline-primary btn-sm" onclick="openMaps()">
+                                    <i class="bi bi-map me-1"></i>View on Map
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if tin_data.npi_list_json %}
+                    <div class="mt-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="bi bi-people me-2"></i>Associated NPIs
+                        </h5>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for npi in tin_data.npi_list_json %}
+                            <span class="npi-badge">{{ npi }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Available Header -->
+    {% if s3_availability %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card detail-card">
+                <div class="card-header {% if s3_availability.available %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>Data Available
+                        {% if s3_availability.available %}
+                        <span class="badge bg-light text-success ms-2">{{ s3_availability.total_tiles }} tile{{ s3_availability.total_tiles|pluralize }}</span>
+                        {% else %}
+                        <span class="badge bg-light text-danger ms-2">No Data</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if s3_availability.available %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>{{ s3_availability.total_tiles }} tile{{ s3_availability.total_tiles|pluralize }} found!</strong> 
+                        Use the filters below to narrow down the results, then click "Analyze This Tile" on any tile to view detailed rate data and export to CSV.
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">
+                        No S3 tiles found for TIN {{ tin_value }}. This organization may not have any negotiated rate data available.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filter Section -->
+    {% if s3_availability.available and filter_options %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-funnel me-2"></i>Filter Data
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="filterForm" class="row g-3">
+                        <!-- Payer Slug -->
+                        {% if filter_options.payer_slugs %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="payer_slug" class="form-label">Payer</label>
+                            <select class="form-select" id="payer_slug" name="payer_slug">
+                                <option value="">All Payers</option>
+                                {% for payer in filter_options.payer_slugs %}
+                                <option value="{{ payer }}">{{ payer }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Procedure Set -->
+                        {% if filter_options.proc_sets %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="proc_set" class="form-label">Procedure Set</label>
+                            <select class="form-select" id="proc_set" name="proc_set">
+                                <option value="">All Procedure Sets</option>
+                                {% for proc_set in filter_options.proc_sets %}
+                                <option value="{{ proc_set }}">{{ proc_set }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Procedure Class -->
+                        {% if filter_options.proc_classes %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="proc_class" class="form-label">Procedure Class</label>
+                            <select class="form-select" id="proc_class" name="proc_class">
+                                <option value="">All Procedure Classes</option>
+                                {% for proc_class in filter_options.proc_classes %}
+                                <option value="{{ proc_class }}">{{ proc_class }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Procedure Group -->
+                        {% if filter_options.proc_groups %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="proc_group" class="form-label">Procedure Group</label>
+                            <select class="form-select" id="proc_group" name="proc_group">
+                                <option value="">All Procedure Groups</option>
+                                {% for proc_group in filter_options.proc_groups %}
+                                <option value="{{ proc_group }}">{{ proc_group }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Billing Class -->
+                        {% if filter_options.billing_classes %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="billing_class" class="form-label">Billing Class</label>
+                            <select class="form-select" id="billing_class" name="billing_class">
+                                <option value="">All Billing Classes</option>
+                                {% for billing_class in filter_options.billing_classes %}
+                                <option value="{{ billing_class }}">{{ billing_class }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Negotiation Arrangement -->
+                        {% if filter_options.negotiation_arrangements %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="negotiation_arrangement" class="form-label">Negotiation Arrangement</label>
+                            <select class="form-select" id="negotiation_arrangement" name="negotiation_arrangement">
+                                <option value="">All Arrangements</option>
+                                {% for arrangement in filter_options.negotiation_arrangements %}
+                                <option value="{{ arrangement }}">{{ arrangement }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Negotiated Type -->
+                        {% if filter_options.negotiated_types %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="negotiated_type" class="form-label">Negotiated Type</label>
+                            <select class="form-select" id="negotiated_type" name="negotiated_type">
+                                <option value="">All Types</option>
+                                {% for negotiated_type in filter_options.negotiated_types %}
+                                <option value="{{ negotiated_type }}">{{ negotiated_type }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Billing Code -->
+                        {% if filter_options.billing_codes %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="billing_code" class="form-label">Billing Code</label>
+                            <select class="form-select" id="billing_code" name="billing_code">
+                                <option value="">All Billing Codes</option>
+                                {% for billing_code in filter_options.billing_codes %}
+                                <option value="{{ billing_code }}">{{ billing_code }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Taxonomy Display Name -->
+                        {% if filter_options.taxonomy_display_names %}
+                        <div class="col-md-6 col-lg-4">
+                            <label for="taxonomy_display_name" class="form-label">Taxonomy (Display Name)</label>
+                            <select class="form-select" id="taxonomy_display_name" name="taxonomy_display_name">
+                                <option value="">All Taxonomies</option>
+                                {% for taxonomy_name in filter_options.taxonomy_display_names %}
+                                <option value="{{ taxonomy_name }}">{{ taxonomy_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-12">
+                            <button type="button" class="btn btn-primary me-2" onclick="applyFilters()">
+                                <i class="bi bi-funnel me-1"></i>Apply Filters
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                                <i class="bi bi-x-circle me-1"></i>Clear All
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- S3 Tiles Results -->
+    {% if s3_availability.available %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-ul me-2"></i>S3 Tiles Details
+                        <span class="badge bg-primary ms-2" id="tileCount">{{ s3_availability.tiles|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="tilesContainer">
+                        {% for tile in s3_availability.tiles %}
+                        <div class="col-lg-6 mb-4 tile-card" 
+                             data-payer="{{ tile.payer_slug }}"
+                             data-proc-set="{{ tile.proc_set }}"
+                             data-proc-class="{{ tile.proc_class }}"
+                             data-proc-group="{{ tile.proc_group }}"
+                             data-billing-class="{{ tile.billing_class }}"
+                             data-negotiation-arrangement="{{ tile.negotiation_arrangement }}"
+                             data-negotiated-type="{{ tile.negotiated_type }}"
+                             data-billing-codes="{% for code in tile.billing_codes_json %}{{ code }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                             data-taxonomy-names="{% for name in tile.taxonomy_display_names %}{{ name }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                            <div class="card s3-tile-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <h6 class="card-title mb-0">
+                                            <i class="bi bi-file-earmark-text me-2"></i>{{ tile.payer_slug }}
+                                        </h6>
+                                        <span class="badge bg-success">{{ tile.row_count|floatformat:0 }} rows</span>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-6">
+                                            <ul class="list-unstyled small">
+                                                <li><strong>Billing Class:</strong> {{ tile.billing_class }}</li>
+                                                <li><strong>Negotiation:</strong> {{ tile.negotiated_type }}</li>
+                                                <li><strong>Arrangement:</strong> {{ tile.negotiation_arrangement }}</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-6">
+                                            <ul class="list-unstyled small">
+                                                <li><strong>Procedure Set:</strong> {{ tile.proc_set }}</li>
+                                                <li><strong>Procedure Class:</strong> {{ tile.proc_class }}</li>
+                                                <li><strong>Procedure Group:</strong> {{ tile.proc_group }}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if tile.billing_codes_json %}
+                                    <div class="mb-3">
+                                        <h6 class="text-primary small mb-2">
+                                            <i class="bi bi-list-ol me-1"></i>Billing Codes ({{ tile.billing_codes_json|length }})
+                                        </h6>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for code in tile.billing_codes_json|slice:":10" %}
+                                                <span class="badge bg-secondary">{{ code }}</span>
+                                            {% endfor %}
+                                            {% if tile.billing_codes_json|length > 10 %}
+                                                <span class="badge bg-light text-dark">+{{ tile.billing_codes_json|length|add:"-10" }} more</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if tile.taxonomy_display_names %}
+                                    <div class="mb-3">
+                                        <h6 class="text-primary small mb-2">
+                                            <i class="bi bi-tags me-1"></i>Taxonomy Codes ({{ tile.taxonomy_display_names|length }})
+                                        </h6>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for display_name in tile.taxonomy_display_names|slice:":6" %}
+                                                <span class="badge bg-info">{{ display_name }}</span>
+                                            {% endfor %}
+                                            {% if tile.taxonomy_display_names|length > 6 %}
+                                                <span class="badge bg-light text-dark">+{{ tile.taxonomy_display_names|length|add:"-6" }} more</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small class="text-muted">
+                                                <i class="bi bi-calendar me-1"></i>{{ tile.created_at_utc }}
+                                            </small>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <small class="text-muted">
+                                                <i class="bi bi-hdd me-1"></i>{{ tile.parts_count }} part{{ tile.parts_count|pluralize }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3 text-center">
+                                        <a href="{% url 'tile_analyzer' %}?s3_prefix={{ tile.s3_prefix|urlencode }}&tin_value={{ tin_value }}&payer_slug={{ tile.payer_slug|urlencode }}&billing_class={{ tile.billing_class|urlencode }}&proc_set={{ tile.proc_set|urlencode }}&proc_class={{ tile.proc_class|urlencode }}&proc_group={{ tile.proc_group|urlencode }}" 
+                                           class="btn btn-primary btn-sm w-100">
+                                            <i class="bi bi-bar-chart-fill me-2"></i>Analyze This Tile
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error_message %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>{{ error_message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Navigation Actions -->
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <a href="{% url 'rate_lookup_tin_lookup' %}" class="btn btn-primary me-3">
+                <i class="bi bi-arrow-left me-2"></i>Back to TIN Lookup
+            </a>
+            <a href="{% url 'rate_lookup_home' %}" class="btn btn-outline-primary me-3">
+                <i class="bi bi-house me-2"></i>Rate Lookup Home
+            </a>
+            {% if s3_availability.available %}
+            <a href="{% url 'rate_lookup_data_explorer' %}?billing_codes={{ tin_value }}" class="btn btn-outline-success">
+                <i class="bi bi-search me-2"></i>Search Related Data
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openMaps() {
+        const lat = {{ tin_data.latitude|default:"null" }};
+        const lng = {{ tin_data.longitude|default:"null" }};
+        
+        if (lat && lng) {
+            const url = `https://www.google.com/maps?q=${lat},${lng}`;
+            window.open(url, '_blank');
+        } else {
+            alert('Coordinates not available for this location.');
+        }
+    }
+    
+    function applyFilters() {
+        const tiles = document.querySelectorAll('.tile-card');
+        const filters = {
+            payer: document.getElementById('payer_slug')?.value,
+            procSet: document.getElementById('proc_set')?.value,
+            procClass: document.getElementById('proc_class')?.value,
+            procGroup: document.getElementById('proc_group')?.value,
+            billingClass: document.getElementById('billing_class')?.value,
+            negotiationArrangement: document.getElementById('negotiation_arrangement')?.value,
+            negotiatedType: document.getElementById('negotiated_type')?.value,
+            billingCode: document.getElementById('billing_code')?.value,
+            taxonomyName: document.getElementById('taxonomy_display_name')?.value
+        };
+        
+        let visibleCount = 0;
+        
+        tiles.forEach(tile => {
+            let shouldShow = true;
+            
+            // Check each filter
+            if (filters.payer && tile.dataset.payer !== filters.payer) {
+                shouldShow = false;
+            }
+            if (filters.procSet && tile.dataset.procSet !== filters.procSet) {
+                shouldShow = false;
+            }
+            if (filters.procClass && tile.dataset.procClass !== filters.procClass) {
+                shouldShow = false;
+            }
+            if (filters.procGroup && tile.dataset.procGroup !== filters.procGroup) {
+                shouldShow = false;
+            }
+            if (filters.billingClass && tile.dataset.billingClass !== filters.billingClass) {
+                shouldShow = false;
+            }
+            if (filters.negotiationArrangement && tile.dataset.negotiationArrangement !== filters.negotiationArrangement) {
+                shouldShow = false;
+            }
+            if (filters.negotiatedType && tile.dataset.negotiatedType !== filters.negotiatedType) {
+                shouldShow = false;
+            }
+            if (filters.billingCode && !tile.dataset.billingCodes.includes(filters.billingCode)) {
+                shouldShow = false;
+            }
+            if (filters.taxonomyName && !tile.dataset.taxonomyNames.includes(filters.taxonomyName)) {
+                shouldShow = false;
+            }
+            
+            if (shouldShow) {
+                tile.style.display = 'block';
+                visibleCount++;
+            } else {
+                tile.style.display = 'none';
+            }
+        });
+        
+        // Update the tile count badge
+        document.getElementById('tileCount').textContent = visibleCount;
+        
+        // Show message if no tiles match
+        if (visibleCount === 0) {
+            const container = document.getElementById('tilesContainer');
+            if (!document.getElementById('noResultsMessage')) {
+                const noResultsDiv = document.createElement('div');
+                noResultsDiv.id = 'noResultsMessage';
+                noResultsDiv.className = 'col-12 text-center py-5';
+                noResultsDiv.innerHTML = `
+                    <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3 text-muted">No tiles match the selected filters</h5>
+                    <p class="text-muted">Try adjusting your filter criteria or clear all filters to see all tiles.</p>
+                    <button type="button" class="btn btn-outline-primary" onclick="clearFilters()">
+                        <i class="bi bi-x-circle me-1"></i>Clear All Filters
+                    </button>
+                `;
+                container.appendChild(noResultsDiv);
+            }
+        } else {
+            const noResultsMsg = document.getElementById('noResultsMessage');
+            if (noResultsMsg) {
+                noResultsMsg.remove();
+            }
+        }
+    }
+
+    function clearFilters() {
+        // Clear all select inputs
+        document.querySelectorAll('#filterForm select').forEach(select => {
+            select.value = '';
+        });
+        
+        // Show all tiles
+        document.querySelectorAll('.tile-card').forEach(tile => {
+            tile.style.display = 'block';
+        });
+        
+        // Update tile count
+        const totalTiles = document.querySelectorAll('.tile-card').length;
+        document.getElementById('tileCount').textContent = totalTiles;
+        
+        // Remove no results message if it exists
+        const noResultsMsg = document.getElementById('noResultsMessage');
+        if (noResultsMsg) {
+            noResultsMsg.remove();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add event listeners to automatically apply filters when dropdowns change
+        document.querySelectorAll('#filterForm select').forEach(select => {
+            select.addEventListener('change', applyFilters);
+        });
+        
+        console.log('TIN Details page loaded for TIN: {{ tin_value }}');
+    });
+</script>
+{% endblock %}

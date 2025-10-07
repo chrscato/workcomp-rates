@@ -75,3 +75,4 @@ logs/
 *.bak
 *.backup
 server-pass.txt
+*.sqlite

@@ -29,17 +29,8 @@
                     </div>
                     
                     <div class="mt-4">
-                        <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg me-3">
-                            <i class="bi bi-graph-up-arrow me-2"></i>Access Transparency Dashboard
-                        </a>
-                        <a href="{% url 'tin_provider_lookup' %}" class="btn btn-outline-primary btn-lg me-3">
-                            <i class="bi bi-search-heart me-2"></i>TIN & Provider Lookup
-                        </a>
-                        <a href="{% url 'benchmark_compare' %}" class="btn btn-outline-success btn-lg me-3">
-                            <i class="bi bi-bar-chart me-2"></i>Benchmark Comparison
-                        </a>
-                        <a href="{% url 'steerage_preview' %}" class="btn btn-outline-warning btn-lg">
-                            <i class="bi bi-compass me-2"></i>Steerage Preview
+                        <a href="{% url 'rate_lookup_home' %}" class="btn btn-primary btn-lg">
+                            <i class="bi bi-graph-up-arrow me-2"></i>Rate Lookup
                         </a>
                     </div>
                 </div>
@@ -57,9 +48,6 @@
                     </div>
                     <h5 class="card-title">TIN & Provider Lookup</h5>
                     <p class="card-text">Check and see if we have the specific provider you are looking for. Search by TIN number or organization name.</p>
-                    <a href="{% url 'tin_provider_lookup' %}" class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-search me-1"></i>Search Providers
-                    </a>
                 </div>
             </div>
         </div>

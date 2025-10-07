@@ -32,4 +32,14 @@ urlpatterns = [
     # TIN and Provider Lookup
     path('tin-provider-lookup/', views.tin_provider_lookup, name='tin_provider_lookup'),
     path('tin-provider-lookup/ajax/', views.tin_provider_lookup_ajax, name='tin_provider_lookup_ajax'),
+    
+        # Rate Lookup
+        path('rate-lookup/', views.rate_lookup_home, name='rate_lookup_home'),
+        path('rate-lookup/tin/', views.rate_lookup_tin_lookup, name='rate_lookup_tin_lookup'),
+        path('rate-lookup/tin/<str:tin_value>/', views.rate_lookup_tin_details, name='rate_lookup_tin_details'),
+        path('rate-lookup/episodes/', views.rate_lookup_episodes_care, name='rate_lookup_episodes_care'),
+        path('rate-lookup/explorer/', views.rate_lookup_data_explorer, name='rate_lookup_data_explorer'),
+        path('rate-lookup/analyze/', views.rate_analyzer, name='rate_analyzer'),
+        path('rate-lookup/tile-analyzer/', views.tile_analyzer, name='tile_analyzer'),
+        path('rate-lookup/tile-analyzer/download-csv/', views.tile_analyzer_download_csv, name='tile_analyzer_download_csv'),
 ]

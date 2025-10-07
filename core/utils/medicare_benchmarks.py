@@ -223,6 +223,83 @@ class MedicareBenchmarkLookup:
             logger.error(f"Unexpected error in get_professional_rate: {str(e)}")
             return None
     
+    def get_professional_rate_state_avg(self, cpt_code: str, state: str, year: int = 2025) -> Optional[float]:
+        """
+        Get Medicare professional rate state average for a CPT code and state.
+        
+        This method calculates the state average by averaging all locality-specific
+        rates within the state for the given CPT code.
+        
+        Args:
+            cpt_code (str): CPT procedure code (e.g., '73721')
+            state (str): State code (e.g., 'GA')
+            year (int): Year for the rate calculation (default: 2025)
+        
+        Returns:
+            Optional[float]: Medicare professional rate state average or None if not found
+        """
+        try:
+            if not os.path.exists(self.db_path):
+                logger.error(f"Database file not found: {self.db_path}")
+                return None
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Query to calculate state average by averaging all localities in the state
+                query = """
+                SELECT
+                    AVG(
+                        (
+                          (
+                            COALESCE(rvu.work_rvu, 0) * COALESCE(gpci.work_gpci, 0) +
+                            COALESCE(rvu.practice_expense_rvu, 0) * COALESCE(gpci.pe_gpci, 0) +
+                            COALESCE(rvu.malpractice_rvu, 0) * COALESCE(gpci.mp_gpci, 0)
+                          ) * COALESCE(cf.conversion_factor, 0)
+                        )
+                    ) AS state_avg_allowed_amount
+                FROM
+                    medicare_locality_map mloc
+                JOIN
+                    medicare_locality_meta meta
+                    ON mloc.carrier_code = meta.mac_code
+                    AND mloc.locality_code = meta.locality_code
+                JOIN
+                    cms_gpci gpci
+                    ON TRIM(meta.fee_schedule_area) = TRIM(gpci.locality_name)
+                    AND mloc.locality_code = gpci.locality_code
+                JOIN
+                    cms_rvu rvu
+                    ON 1=1
+                JOIN
+                    cms_conversion_factor cf
+                    ON gpci.year = cf.year
+                WHERE
+                    mloc.state_code = ?
+                    AND gpci.year = ?
+                    AND rvu.year = ?
+                    AND rvu.procedure_code = ?
+                    AND (rvu.modifier IS NULL OR rvu.modifier = '')
+                """
+                
+                cursor.execute(query, (state.upper(), year, year, cpt_code))
+                result = cursor.fetchone()
+                
+                if result and result[0] is not None:
+                    state_avg_amount = result[0]
+                    logger.debug(f"Found state average professional rate for {cpt_code} in {state}: {state_avg_amount}")
+                    return float(state_avg_amount)
+                else:
+                    logger.warning(f"No state average professional rate found for {cpt_code} in {state}")
+                    return None
+                    
+        except sqlite3.Error as e:
+            logger.error(f"Database error in get_professional_rate_state_avg: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in get_professional_rate_state_avg: {str(e)}")
+            return None
+    
     def get_institutional_rates(self, cpt_code: str, state: str, year: int = 2025) -> Dict[str, Optional[float]]:
         """
         Get Medicare institutional rates (ASC and OPPS) for a CPT code and state.
@@ -336,21 +413,23 @@ class MedicareBenchmarkLookup:
             logger.error(f"Error calculating benchmark percentage: {str(e)}")
             return None
     
-    def get_comprehensive_rates(self, cpt_code: str, zip_code: str, state: str, year: int = 2025) -> Dict[str, Any]:
+    def get_comprehensive_rates(self, cpt_code: str, zip_code: str, state: str, year: int = 2025, use_state_avg: bool = False) -> Dict[str, Any]:
         """
         Get comprehensive Medicare rates for both professional and institutional settings.
         
         Args:
             cpt_code (str): CPT procedure code
-            zip_code (str): ZIP code for professional rates
-            state (str): State code for institutional rates
+            zip_code (str): ZIP code for professional rates (ignored if use_state_avg=True)
+            state (str): State code for institutional rates and state average professional rates
             year (int): Year for rate calculations
+            use_state_avg (bool): If True, use state average for professional rates instead of ZIP-specific
         
         Returns:
             Dict[str, Any]: Comprehensive rate information including benchmark percentages
         """
         result = {
             'professional_rate': None,
+            'professional_rate_state_avg': None,
             'institutional_rates': {
                 'medicare_asc_stateavg': None,
                 'medicare_opps_stateavg': None
@@ -360,14 +439,21 @@ class MedicareBenchmarkLookup:
                 'cpt_code': cpt_code,
                 'zip_code': zip_code,
                 'state': state,
-                'year': year
+                'year': year,
+                'use_state_avg': use_state_avg
             }
         }
         
         try:
-            # Get professional rate
-            prof_rate = self.get_professional_rate(cpt_code, zip_code, year)
-            result['professional_rate'] = prof_rate
+            if use_state_avg:
+                # Get state average professional rate
+                prof_rate_state_avg = self.get_professional_rate_state_avg(cpt_code, state, year)
+                result['professional_rate_state_avg'] = prof_rate_state_avg
+                result['professional_rate'] = prof_rate_state_avg  # For backward compatibility
+            else:
+                # Get ZIP-specific professional rate
+                prof_rate = self.get_professional_rate(cpt_code, zip_code, year)
+                result['professional_rate'] = prof_rate
             
             # Get institutional rates
             inst_rates = self.get_institutional_rates(cpt_code, state, year)
@@ -378,7 +464,7 @@ class MedicareBenchmarkLookup:
             # the structure for calculating percentages when a negotiated rate is available
             
             logger.info(f"Retrieved comprehensive rates for {cpt_code}: "
-                       f"Professional={prof_rate}, "
+                       f"Professional={'State Avg' if use_state_avg else 'ZIP-specific'}={result['professional_rate']}, "
                        f"ASC={inst_rates['medicare_asc_stateavg']}, "
                        f"OPPS={inst_rates['medicare_opps_stateavg']}")
             

@@ -2200,4 +2200,749 @@ def tin_provider_lookup_ajax(request):
     return JsonResponse({'error': 'Invalid request'}, status=400)
 
 
+@login_required
+def rate_lookup_home(request):
+    """
+    Market Rate Lookup Home Page
+    Shows overview of available data and navigation options
+    """
+    try:
+        from .utils.market_rate_lookup import MarketRateLookup
+        
+        lookup = MarketRateLookup()
+        data_summary = lookup.get_data_summary()
+        
+        context = {
+            'data_summary': data_summary,
+            'has_data': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in market_rate_lookup_home view: {str(e)}")
+        context = {
+            'has_data': False,
+            'error_message': 'An error occurred while loading the market rate lookup data.',
+            'data_summary': {}
+        }
+    
+    return render(request, 'core/rate_lookup_home.html', context)
+
+
+@login_required
+def rate_lookup_tin_lookup(request):
+    """
+    TIN Lookup view for Market Rate Lookup
+    Allows users to search for TINs and see S3 tile availability
+    """
+    context = {
+        'search_results': None,
+        'tin_data': None,
+        's3_availability': None,
+        'search_query': None,
+        'search_type': None,
+        'error_message': None
+    }
+    
+    if request.method == 'POST':
+        search_type = request.POST.get('search_type')
+        search_query = request.POST.get('search_query', '').strip()
+        
+        if not search_query:
+            context['error_message'] = 'Please enter a search term.'
+        else:
+            try:
+                from .utils.market_rate_lookup import MarketRateLookup
+                
+                lookup = MarketRateLookup()
+                context['search_type'] = search_type
+                context['search_query'] = search_query
+                
+                if search_type == 'tin':
+                    # Search by TIN
+                    results = lookup.search_tin_lookup(tin_value=search_query)
+                    if results:
+                        context['search_results'] = results
+                        context['tin_data'] = results[0]  # Use first result as primary
+                        
+                        # Check S3 availability for the TIN
+                        s3_data = lookup.check_s3_tiles_availability(search_query)
+                        context['s3_availability'] = s3_data
+                    else:
+                        context['error_message'] = f'No TIN found matching: {search_query}'
+                        
+                elif search_type == 'organization':
+                    # Search by organization name
+                    results = lookup.search_tin_lookup(organization_name=search_query)
+                    if results:
+                        context['search_results'] = results
+                    else:
+                        context['error_message'] = f'No organizations found matching: {search_query}'
+                        
+            except Exception as e:
+                logger.error(f"Error in TIN lookup: {str(e)}")
+                context['error_message'] = 'An error occurred while searching. Please try again.'
+    
+    return render(request, 'core/rate_lookup_tin_lookup.html', context)
+
+
+@login_required
+def rate_lookup_episodes_care(request):
+    """
+    Episodes of Care / Cost Bundles view for Market Rate Lookup
+    Shows episode templates and allows filtering by codes
+    """
+    context = {
+        'episode_templates': None,
+        'search_results': None,
+        'selected_episode': None,
+        'selected_codes': None,
+        'error_message': None
+    }
+    
+    try:
+        from .utils.market_rate_lookup import MarketRateLookup
+        
+        lookup = MarketRateLookup()
+        
+        # Get all episode templates
+        episode_templates = lookup.get_episode_templates()
+        context['episode_templates'] = episode_templates
+        
+        # Handle episode selection and code search
+        if request.method == 'POST':
+            episode_id = request.POST.get('episode_id')
+            episode_type = request.POST.get('episode_type')
+            selected_codes = request.POST.getlist('selected_codes')
+            
+            if episode_id and episode_type:
+                # Find the selected episode
+                selected_episode = None
+                if episode_type in episode_templates:
+                    for episode in episode_templates[episode_type]:
+                        if episode['episode_id'] == episode_id:
+                            selected_episode = episode
+                            break
+                
+                if selected_episode:
+                    context['selected_episode'] = selected_episode
+                    
+                    # Get all codes from the episode
+                    all_codes = []
+                    if selected_episode.get('codes_required'):
+                        all_codes.extend(selected_episode['codes_required'])
+                    if selected_episode.get('codes_optional'):
+                        all_codes.extend(selected_episode['codes_optional'])
+                    if selected_episode.get('codes'):
+                        all_codes.extend(selected_episode['codes'])
+                    
+                    # Search S3 tiles for these codes
+                    if all_codes:
+                        search_results = lookup.search_s3_tiles_by_codes(billing_codes=all_codes)
+                        context['search_results'] = search_results
+                        context['selected_codes'] = all_codes
+        
+        # Handle direct code search
+        if request.method == 'GET':
+            billing_codes = request.GET.getlist('billing_codes')
+            taxonomy_codes = request.GET.getlist('taxonomy_codes')
+            
+            if billing_codes or taxonomy_codes:
+                search_results = lookup.search_s3_tiles_by_codes(
+                    billing_codes=billing_codes if billing_codes else None,
+                    taxonomy_codes=taxonomy_codes if taxonomy_codes else None
+                )
+                context['search_results'] = search_results
+                context['selected_codes'] = {
+                    'billing_codes': billing_codes,
+                    'taxonomy_codes': taxonomy_codes
+                }
+        
+    except Exception as e:
+        logger.error(f"Error in episodes of care view: {str(e)}")
+        context['error_message'] = 'An error occurred while loading episode data.'
+    
+    return render(request, 'core/rate_lookup_episodes_care.html', context)
+
+
+@login_required
+def rate_lookup_data_explorer(request):
+    """
+    Data Explorer view for Market Rate Lookup
+    Shows random tiles by default for easy exploration
+    """
+    import random
+    import sqlite3
+    
+    context = {
+        'search_results': None,
+        'error_message': None,
+        'is_random': False
+    }
+    
+    try:
+        # Get random tiles from s3_tiles
+        dims_db_path = Path(__file__).resolve().parent / 'data' / 'dims.sqlite'
+        conn = sqlite3.connect(str(dims_db_path))
+        cursor = conn.cursor()
+        
+        # Get total count
+        cursor.execute('SELECT COUNT(*) FROM s3_tiles')
+        total_tiles = cursor.fetchone()[0]
+        context['total_tiles_available'] = total_tiles
+        
+        # Get 12 random tiles
+        cursor.execute('''
+            SELECT 
+                payer_slug, billing_class, negotiation_arrangement, negotiated_type,
+                tin_value, proc_set, proc_class, proc_group, s3_prefix,
+                parts_count, row_count, billing_codes_json, taxonomy_codes_json,
+                created_at_utc
+            FROM s3_tiles
+            ORDER BY RANDOM()
+            LIMIT 12
+        ''')
+        
+        tiles = cursor.fetchall()
+        conn.close()
+        
+        # Convert to dict format
+        search_results = []
+        for tile in tiles:
+            import json
+            tile_dict = {
+                'payer_slug': tile[0],
+                'billing_class': tile[1],
+                'negotiation_arrangement': tile[2],
+                'negotiated_type': tile[3],
+                'tin_value': tile[4],
+                'proc_set': tile[5],
+                'proc_class': tile[6],
+                'proc_group': tile[7],
+                's3_prefix': tile[8],
+                'parts_count': tile[9],
+                'row_count': tile[10],
+                'billing_codes_json': json.loads(tile[11]) if tile[11] else [],
+                'taxonomy_codes_json': json.loads(tile[12]) if tile[12] else [],
+                'created_at_utc': tile[13]
+            }
+            
+            # Get taxonomy display names
+            if tile_dict['taxonomy_codes_json']:
+                conn = sqlite3.connect(str(dims_db_path))
+                cursor = conn.cursor()
+                placeholders = ','.join(['?' for _ in tile_dict['taxonomy_codes_json']])
+                query = f'SELECT "Display Name" FROM dim_taxonomy WHERE Code IN ({placeholders})'
+                cursor.execute(query, tile_dict['taxonomy_codes_json'])
+                tile_dict['taxonomy_display_names'] = [row[0] for row in cursor.fetchall()]
+                conn.close()
+            else:
+                tile_dict['taxonomy_display_names'] = []
+            
+            search_results.append(tile_dict)
+        
+        context['search_results'] = search_results
+        context['is_random'] = True
+        
+    except Exception as e:
+        logger.error(f"Error in data explorer view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        context['error_message'] = f'An error occurred while loading data explorer: {str(e)}'
+    
+    return render(request, 'core/rate_lookup_data_explorer.html', context)
+
+
+@login_required
+def rate_lookup_tin_details(request, tin_value):
+    """
+    Detailed view for a specific TIN showing all available data
+    """
+    context = {
+        'tin_value': tin_value,
+        'tin_data': None,
+        's3_availability': None,
+        'error_message': None
+    }
+    
+    try:
+        from .utils.market_rate_lookup import MarketRateLookup
+        
+        lookup = MarketRateLookup()
+        
+        # Get TIN data
+        tin_results = lookup.search_tin_lookup(tin_value=tin_value)
+        if tin_results:
+            context['tin_data'] = tin_results[0]
+        
+        # Get S3 availability
+        s3_data = lookup.check_s3_tiles_availability(tin_value)
+        context['s3_availability'] = s3_data
+        
+        # Get filter options for the tiles
+        filter_options = {}
+        if s3_data and s3_data.get('tiles'):
+            tiles = s3_data['tiles']
+            filter_options = {
+                'payer_slugs': sorted(list(set(tile['payer_slug'] for tile in tiles))),
+                'proc_sets': sorted(list(set(tile['proc_set'] for tile in tiles))),
+                'proc_classes': sorted(list(set(tile['proc_class'] for tile in tiles))),
+                'proc_groups': sorted(list(set(tile['proc_group'] for tile in tiles))),
+                'billing_classes': sorted(list(set(tile['billing_class'] for tile in tiles))),
+                'negotiation_arrangements': sorted(list(set(tile['negotiation_arrangement'] for tile in tiles))),
+                'negotiated_types': sorted(list(set(tile['negotiated_type'] for tile in tiles))),
+                'billing_codes': sorted(list(set(code for tile in tiles for code in tile.get('billing_codes_json', [])))[:50]),  # Limit to 50 most common
+                'taxonomy_display_names': sorted(list(set(name for tile in tiles for name in tile.get('taxonomy_display_names', []))))
+            }
+        context['filter_options'] = filter_options
+        
+    except Exception as e:
+        logger.error(f"Error in TIN details view: {str(e)}")
+        context['error_message'] = 'An error occurred while loading TIN details.'
+    
+    return render(request, 'core/rate_lookup_tin_details.html', context)
+
+
+@login_required
+def rate_analyzer(request):
+    """
+    Analyze a healthcare market by finding TINs within a geographic radius of a zip code
+    """
+    # Get distinct values for filter dropdowns from s3_tiles
+    filter_options = {}
+    try:
+        from .utils.market_rate_lookup import MarketRateLookup
+        lookup = MarketRateLookup()
+        filter_options = lookup.get_s3_filter_options()
+    except Exception as e:
+        logger.error(f"Error fetching filter options: {str(e)}")
+        filter_options = {}
+    
+    context = {
+        'zip_code': '',
+        'radius_miles': 25,
+        'market_data': None,
+        'error_message': None,
+        'filter_options': filter_options
+    }
+    
+    if request.method == 'POST':
+        zip_code = request.POST.get('zip_code', '').strip()
+        radius_miles = float(request.POST.get('radius_miles', 25))
+        
+        # Extract filter parameters
+        filters = {}
+        if request.POST.get('billing_class'):
+            filters['billing_class'] = request.POST.get('billing_class')
+        if request.POST.get('negotiation_arrangement'):
+            filters['negotiation_arrangement'] = request.POST.get('negotiation_arrangement')
+        if request.POST.get('negotiated_type'):
+            filters['negotiated_type'] = request.POST.get('negotiated_type')
+        if request.POST.get('proc_set'):
+            filters['proc_set'] = request.POST.get('proc_set')
+        if request.POST.get('proc_class'):
+            filters['proc_class'] = request.POST.get('proc_class')
+        if request.POST.get('proc_group'):
+            filters['proc_group'] = request.POST.get('proc_group')
+        if request.POST.get('billing_code'):
+            filters['billing_code'] = request.POST.get('billing_code')
+        
+        if zip_code:
+            try:
+                from .utils.market_analyzer import MarketAnalyzer
+                
+                analyzer = MarketAnalyzer()
+                market_data = analyzer.analyze_market_with_s3_data(zip_code, radius_miles, filters)
+                
+                if 'error' in market_data:
+                    context['error_message'] = market_data['error']
+                else:
+                    context['market_data'] = market_data
+                    context['zip_code'] = zip_code
+                    context['radius_miles'] = radius_miles
+                    context['filters'] = filters
+                    
+                    # Generate statistics
+                    context['market_stats'] = analyzer.get_market_statistics(market_data)
+                    
+            except Exception as e:
+                import traceback
+                error_details = traceback.format_exc()
+                logger.error(f"Error in market analyzer: {str(e)}")
+                logger.error(f"Full traceback: {error_details}")
+                context['error_message'] = f'An error occurred while analyzing the market: {str(e)}'
+        else:
+            context['error_message'] = 'Please enter a valid zip code.'
+    
+    return render(request, 'core/rate_analyzer.html', context)
+
+
+@login_required
+def tile_analyzer(request):
+    """
+    Tile Analyzer view for parquet file analysis with metrics
+    """
+    from .utils.partition_navigator import PartitionNavigator
+    from pathlib import Path
+    from botocore.exceptions import ClientError
+    
+    s3_prefix = request.GET.get('s3_prefix', '')
+    
+    context = {
+        's3_prefix': s3_prefix,
+        'tin_value': request.GET.get('tin_value', ''),
+        'payer_slug': request.GET.get('payer_slug', ''),
+        'billing_class': request.GET.get('billing_class', ''),
+        'proc_set': request.GET.get('proc_set', ''),
+        'proc_class': request.GET.get('proc_class', ''),
+        'proc_group': request.GET.get('proc_group', ''),
+        'metrics': None,
+        'error_message': None,
+    }
+    
+    # Load metrics if s3_prefix is provided
+    if s3_prefix:
+        try:
+            db_path = Path(__file__).resolve().parent / 'data' / 'partition_navigation.db'
+            navigator = PartitionNavigator(db_path=str(db_path))
+            
+            # Parse S3 prefix
+            if s3_prefix.startswith('s3://'):
+                s3_prefix_clean = s3_prefix[5:]
+            else:
+                s3_prefix_clean = s3_prefix
+            
+            bucket_name, prefix = s3_prefix_clean.split('/', 1)
+            
+            # List parquet files
+            s3_client = navigator.connect_s3()
+            parquet_files = []
+            
+            if not prefix.endswith('/'):
+                prefix += '/'
+            
+            response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+            
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    key = obj['Key']
+                    if key.endswith('.parquet'):
+                        parquet_files.append(f"s3://{bucket_name}/{key}")
+            
+            if parquet_files:
+                # Fetch data
+                df = navigator.combine_partitions_for_analysis(
+                    partition_paths=parquet_files,
+                    max_rows=100000
+                )
+                
+                if df is not None and not df.empty:
+                    # Calculate metrics with actual distinct values
+                    metrics = {}
+                    
+                    # Simple distinct values for scalar fields
+                    scalar_fields = [
+                        'payer_slug', 'tin_value', 'network_pattern_id', 
+                        'negotiation_arrangement', 'negotiated_type', 'reporting_entity_type',
+                        'tin_org_name', 'tin_state', 'tin_zip', 'tin_city', 'tin_address',
+                        'proc_set', 'proc_group', 'proc_class'
+                    ]
+                    
+                    for field in scalar_fields:
+                        if field in df.columns:
+                            unique_values = df[field].dropna().unique().tolist()
+                            metrics[field] = {
+                                'count': len(unique_values),
+                                'values': sorted([str(v) for v in unique_values])[:100]  # Limit to 100 values
+                            }
+                        else:
+                            metrics[field] = {'count': 0, 'values': []}
+                    
+                    # NPI array field
+                    if 'npi' in df.columns:
+                        try:
+                            exploded = df['npi'].explode()
+                            unique_npis = exploded.dropna().unique().tolist()
+                            metrics['npi'] = {
+                                'count': len(unique_npis),
+                                'values': sorted([str(v) for v in unique_npis])[:100]
+                            }
+                        except:
+                            metrics['npi'] = {'count': 0, 'values': []}
+                    else:
+                        metrics['npi'] = {'count': 0, 'values': []}
+                    
+                    # Taxonomy codes - cross-reference with dim_taxonomy
+                    if 'primary_taxonomy_code' in df.columns:
+                        try:
+                            # Get unique taxonomy codes
+                            exploded = df['primary_taxonomy_code'].explode()
+                            unique_codes = exploded.dropna().unique().tolist()
+                            
+                            # Load dim_taxonomy to get display names
+                            import sqlite3
+                            dims_db_path = Path(__file__).resolve().parent / 'data' / 'dims.sqlite'
+                            conn = sqlite3.connect(str(dims_db_path))
+                            cursor = conn.cursor()
+                            
+                            # Build query to get display names
+                            placeholders = ','.join(['?' for _ in unique_codes])
+                            query = f'''
+                                SELECT Code, "Display Name" 
+                                FROM dim_taxonomy 
+                                WHERE Code IN ({placeholders})
+                            '''
+                            cursor.execute(query, unique_codes)
+                            taxonomy_map = {row[0]: row[1] for row in cursor.fetchall()}
+                            conn.close()
+                            
+                            # Create list of display names with codes
+                            taxonomy_display = []
+                            for code in sorted(unique_codes):
+                                display_name = taxonomy_map.get(code, code)  # Fallback to code if not found
+                                taxonomy_display.append({
+                                    'code': code,
+                                    'display_name': display_name
+                                })
+                            
+                            metrics['primary_taxonomy_code'] = {
+                                'count': len(unique_codes),
+                                'values': taxonomy_display[:100]  # Limit to 100
+                            }
+                        except Exception as e:
+                            logger.error(f"Error processing taxonomy codes: {e}")
+                            metrics['primary_taxonomy_code'] = {'count': 0, 'values': []}
+                    else:
+                        metrics['primary_taxonomy_code'] = {'count': 0, 'values': []}
+                    
+                    # Add total rows
+                    metrics['total_rows'] = len(df)
+                    metrics['max_rows_limit'] = 100000
+                    
+                    # Prepare chart data grouped by network_pattern_id
+                    chart_data = {}
+                    if 'network_pattern_id' in df.columns and 'billing_code' in df.columns:
+                        import sqlite3
+                        import pandas as pd
+                        import json
+                        dims_db_path = Path(__file__).resolve().parent / 'data' / 'dims.sqlite'
+                        
+                        # Get distinct network patterns
+                        network_patterns = sorted(df['network_pattern_id'].dropna().unique())
+                        
+                        for network_id in network_patterns:
+                            network_df = df[df['network_pattern_id'] == network_id].copy()
+                            
+                            # Get top 5 billing codes by frequency
+                            top_codes = network_df['billing_code'].value_counts().head(5).index.tolist()
+                            
+                            # Get all unique billing codes for dropdown
+                            all_codes = sorted(network_df['billing_code'].dropna().unique().tolist())
+                            
+                            # Prepare data for each billing code
+                            code_data = []
+                            for code in top_codes:
+                                code_df = network_df[network_df['billing_code'] == code]
+                                
+                                # Get the name field (first non-null value for this code)
+                                code_name = None
+                                if 'name' in code_df.columns:
+                                    code_name = code_df['name'].dropna().iloc[0] if len(code_df['name'].dropna()) > 0 else None
+                                
+                                # Group by taxonomy to find rate variations
+                                if 'primary_taxonomy_code' in code_df.columns:
+                                    # Convert array to hashable tuple for grouping
+                                    code_df_copy = code_df.copy()
+                                    code_df_copy['taxonomy_key'] = code_df_copy['primary_taxonomy_code'].apply(
+                                        lambda x: tuple(sorted(x)) if isinstance(x, (list, pd.Series)) else (tuple(x) if hasattr(x, '__iter__') and not isinstance(x, str) else (x,))
+                                    )
+                                    
+                                    # Get unique taxonomy combinations and their rates
+                                    taxonomy_groups = code_df_copy.groupby('taxonomy_key').agg({
+                                        'negotiated_rate': 'mean',
+                                        'prof_medicare': lambda x: x.dropna().mean() if x.notna().any() else None,
+                                        'asc_medicare': lambda x: x.dropna().mean() if x.notna().any() else None,
+                                        'opps_medicare': lambda x: x.dropna().mean() if x.notna().any() else None,
+                                    }).reset_index()
+                                    
+                                    # Get taxonomy display names from the tuple keys
+                                    all_taxonomy_codes = set()
+                                    for taxonomy_tuple in taxonomy_groups['taxonomy_key']:
+                                        if taxonomy_tuple and taxonomy_tuple != (None,):
+                                            all_taxonomy_codes.update(taxonomy_tuple)
+                                    
+                                    taxonomy_codes = list(all_taxonomy_codes)
+                                    if taxonomy_codes:
+                                        conn = sqlite3.connect(str(dims_db_path))
+                                        cursor = conn.cursor()
+                                        placeholders = ','.join(['?' for _ in taxonomy_codes])
+                                        query = f'SELECT Code, "Display Name" FROM dim_taxonomy WHERE Code IN ({placeholders})'
+                                        cursor.execute(query, taxonomy_codes)
+                                        taxonomy_map = {row[0]: row[1] for row in cursor.fetchall()}
+                                        conn.close()
+                                    else:
+                                        taxonomy_map = {}
+                                    
+                                    # Convert to list of dicts
+                                    for _, row in taxonomy_groups.iterrows():
+                                        taxonomy_tuple = row['taxonomy_key']
+                                        
+                                        # Create display name from tuple of taxonomy codes
+                                        if taxonomy_tuple and taxonomy_tuple != (None,):
+                                            display_parts = [taxonomy_map.get(code, code) for code in taxonomy_tuple if code]
+                                            taxonomy_display = ', '.join(display_parts[:3])  # Limit to 3 for readability
+                                            if len(display_parts) > 3:
+                                                taxonomy_display += f' +{len(display_parts)-3} more'
+                                            taxonomy_code_str = ', '.join(str(c) for c in taxonomy_tuple if c)
+                                        else:
+                                            taxonomy_display = 'Unknown'
+                                            taxonomy_code_str = None
+                                        
+                                        code_data.append({
+                                            'billing_code': code,
+                                            'name': code_name,
+                                            'taxonomy_code': taxonomy_code_str,
+                                            'taxonomy_display': taxonomy_display,
+                                            'negotiated_rate': float(row['negotiated_rate']) if pd.notna(row['negotiated_rate']) else None,
+                                            'prof_medicare': float(row['prof_medicare']) if pd.notna(row['prof_medicare']) else None,
+                                            'asc_medicare': float(row['asc_medicare']) if pd.notna(row['asc_medicare']) else None,
+                                            'opps_medicare': float(row['opps_medicare']) if pd.notna(row['opps_medicare']) else None,
+                                        })
+                                else:
+                                    # No taxonomy differentiation
+                                    avg_rates = code_df.agg({
+                                        'negotiated_rate': 'mean',
+                                        'prof_medicare': lambda x: x.dropna().mean() if x.notna().any() else None,
+                                        'asc_medicare': lambda x: x.dropna().mean() if x.notna().any() else None,
+                                        'opps_medicare': lambda x: x.dropna().mean() if x.notna().any() else None,
+                                    })
+                                    
+                                    code_data.append({
+                                        'billing_code': code,
+                                        'name': code_name,
+                                        'taxonomy_code': None,
+                                        'taxonomy_display': 'All Taxonomies',
+                                        'negotiated_rate': float(avg_rates['negotiated_rate']) if pd.notna(avg_rates['negotiated_rate']) else None,
+                                        'prof_medicare': float(avg_rates['prof_medicare']) if pd.notna(avg_rates['prof_medicare']) else None,
+                                        'asc_medicare': float(avg_rates['asc_medicare']) if pd.notna(avg_rates['asc_medicare']) else None,
+                                        'opps_medicare': float(avg_rates['opps_medicare']) if pd.notna(avg_rates['opps_medicare']) else None,
+                                    })
+                            
+                            chart_data[str(network_id)] = {
+                                'network_id': str(network_id),
+                                'top_codes': top_codes,
+                                'all_codes': all_codes,
+                                'data': code_data
+                            }
+                    
+                    # Pass chart_data directly (Django templates can handle Python dicts/lists)
+                    context['metrics'] = metrics
+                    context['chart_data'] = chart_data
+                    context['billing_class'] = request.GET.get('billing_class', '')
+                    logger.info(f"Calculated metrics for tile: analyzed {len(df)} rows with {len(chart_data)} network patterns")
+                    
+        except Exception as e:
+            logger.error(f"Error loading tile metrics: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            context['error_message'] = f"Error loading metrics: {str(e)}"
+    
+    return render(request, 'core/tile_analyzer.html', context)
+
+
+@login_required
+def tile_analyzer_download_csv(request):
+    """
+    Download tile data as CSV from S3 partition
+    """
+    import csv
+    import io
+    from django.http import HttpResponse
+    from .utils.partition_navigator import PartitionNavigator
+    from pathlib import Path
+    import boto3
+    from botocore.exceptions import ClientError
+    
+    s3_prefix = request.GET.get('s3_prefix', '')
+    
+    if not s3_prefix:
+        return HttpResponse("No S3 prefix provided", status=400)
+    
+    try:
+        # Initialize PartitionNavigator
+        db_path = Path(__file__).resolve().parent / 'data' / 'partition_navigation.db'
+        navigator = PartitionNavigator(db_path=str(db_path))
+        
+        # Parse S3 prefix to get bucket and prefix
+        if s3_prefix.startswith('s3://'):
+            s3_prefix_clean = s3_prefix[5:]
+        else:
+            s3_prefix_clean = s3_prefix
+        
+        bucket_name, prefix = s3_prefix_clean.split('/', 1)
+        
+        # List all parquet files in the S3 prefix
+        logger.info(f"Listing parquet files in S3 prefix: {s3_prefix}")
+        s3_client = navigator.connect_s3()
+        
+        parquet_files = []
+        try:
+            # Ensure prefix ends with /
+            if not prefix.endswith('/'):
+                prefix += '/'
+            
+            response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+            
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    key = obj['Key']
+                    if key.endswith('.parquet'):
+                        parquet_files.append(f"s3://{bucket_name}/{key}")
+                        logger.info(f"Found parquet file: {key}")
+        except ClientError as e:
+            logger.error(f"Error listing S3 objects: {e}")
+            return HttpResponse(f"Error accessing S3: {str(e)}", status=500)
+        
+        if not parquet_files:
+            logger.warning(f"No parquet files found in {s3_prefix}")
+            return HttpResponse("No parquet files found in the specified partition", status=404)
+        
+        # Fetch data from S3 partition files
+        logger.info(f"Fetching data from {len(parquet_files)} parquet file(s)")
+        df = navigator.combine_partitions_for_analysis(
+            partition_paths=parquet_files,
+            max_rows=100000  # Limit to 100k rows for performance
+        )
+        
+        if df is None or df.empty:
+            return HttpResponse("No data found in partition", status=404)
+        
+        # Remove internal metadata columns
+        metadata_cols = [col for col in df.columns if col.startswith('_')]
+        if metadata_cols:
+            df = df.drop(columns=metadata_cols)
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        
+        # Generate filename from partition parameters
+        tin_value = request.GET.get('tin_value', 'unknown')
+        payer_slug = request.GET.get('payer_slug', 'unknown')
+        proc_group = request.GET.get('proc_group', 'unknown')
+        
+        filename = f"tile_data_{payer_slug}_{tin_value}_{proc_group}.csv"
+        filename = filename.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        # Write CSV data
+        df.to_csv(response, index=False)
+        
+        logger.info(f"Successfully downloaded {len(df)} rows as CSV")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error downloading tile data as CSV: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return HttpResponse(f"Error downloading data: {str(e)}", status=500)
+
 
