@@ -114,6 +114,15 @@
 
     <!-- Tile Metrics -->
     {% if metrics %}
+    <!-- Data Summary Button -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <button type="button" class="btn btn-info btn-lg w-100" data-bs-toggle="modal" data-bs-target="#dataSummaryModal">
+                <i class="bi bi-info-circle me-2"></i>View Data Summary
+            </button>
+        </div>
+    </div>
+
     <div class="row mb-4">
         <div class="col-12">
             <div class="card analyzer-card">
@@ -911,4 +920,148 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<!-- Data Summary Modal -->
+{% if metrics %}
+<div class="modal fade" id="dataSummaryModal" tabindex="-1" aria-labelledby="dataSummaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="dataSummaryModalLabel">
+                    <i class="bi bi-info-circle me-2"></i>Data Summary
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-4">
+                    <h6 class="alert-heading"><i class="bi bi-graph-up me-2"></i>Dataset Overview</h6>
+                    <p class="mb-2">
+                        This data is from <strong>{{ metrics.payer_slug.count }} payer{{ metrics.payer_slug.count|pluralize }}</strong>
+                        {% if metrics.payer_slug.values %}
+                            ({% for payer in metrics.payer_slug.values %}{{ payer }}{% if not forloop.last %}, {% endif %}{% endfor %})
+                        {% endif %}.
+                        It consists of <strong>{{ metrics.total_rows|floatformat:0 }} record{{ metrics.total_rows|pluralize }}</strong>, across 
+                        <strong>{{ metrics.primary_taxonomy_code.count }} taxonomy code{{ metrics.primary_taxonomy_code.count|pluralize }}</strong>
+                        {% if metrics.primary_taxonomy_code.values %}
+                            including:
+                            <span class="d-block mt-2">
+                                {% for taxonomy in metrics.primary_taxonomy_code.values|slice:":5" %}
+                                    <span class="badge bg-info me-1 mb-1">{{ taxonomy.display_name }}</span>
+                                {% endfor %}
+                                {% if metrics.primary_taxonomy_code.count > 5 %}
+                                    <span class="badge bg-secondary">+{{ metrics.primary_taxonomy_code.count|add:"-5" }} more</span>
+                                {% endif %}
+                            </span>
+                        {% endif %}.
+                    </p>
+                    <p class="mb-0">
+                        Specific to billing codes under 
+                        <strong>{{ metrics.proc_set.count }} procedure set{{ metrics.proc_set.count|pluralize }}</strong>
+                        {% if metrics.proc_set.values %}({{ metrics.proc_set.values|join:", " }}){% endif %},
+                        <strong>{{ metrics.proc_class.count }} procedure class{{ metrics.proc_class.count|pluralize|slice:"2:" }}</strong>
+                        {% if metrics.proc_class.values %}({{ metrics.proc_class.values|join:", " }}){% endif %}, and
+                        <strong>{{ metrics.proc_group.count }} procedure group{{ metrics.proc_group.count|pluralize }}</strong>
+                        {% if metrics.proc_group.values %}({{ metrics.proc_group.values|join:", " }}){% endif %}.
+                    </p>
+                </div>
+
+                <div class="alert {% if metrics.network_pattern_id.count > 1 %}alert-warning{% else %}alert-success{% endif %}">
+                    <h6 class="alert-heading"><i class="bi bi-diagram-3 me-2"></i>Network Analysis</h6>
+                    <p class="mb-0">
+                        {% if metrics.network_pattern_id.count > 1 %}
+                            We found <strong>{{ metrics.network_pattern_id.count }} network patterns</strong> for the same place of service and billing codes for this TIN. 
+                            We assume this is due to the Provider taking multiple networks from 
+                            {% if metrics.payer_slug.count == 1 and metrics.payer_slug.values %}
+                                <strong>{{ metrics.payer_slug.values.0 }}</strong>
+                            {% else %}
+                                the payer{{ metrics.payer_slug.count|pluralize }}
+                            {% endif %}.
+                        {% else %}
+                            We found <strong>1 network pattern</strong> here, indicating a single network configuration.
+                        {% endif %}
+                    </p>
+                    {% if metrics.network_pattern_id.values %}
+                        <div class="mt-2">
+                            <small class="text-muted">Network Pattern IDs:</small>
+                            {% for network in metrics.network_pattern_id.values %}
+                                <span class="badge bg-secondary ms-1">{{ network }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="alert alert-primary">
+                    <h6 class="alert-heading"><i class="bi bi-heart-pulse me-2"></i>Medicare Benchmark Information</h6>
+                    <p class="mb-2">
+                        <strong>Medicare benchmarks are based on the state average Medicare rate for this TIN.</strong>
+                    </p>
+                    {% if metrics.billing_class.values %}
+                        {% with billing_class_str=metrics.billing_class.values|join:","|lower %}
+                            {% if 'professional' in billing_class_str or 'prof' in billing_class_str %}
+                                <p class="mb-0">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    This data has a <strong>professional billing class</strong>, so we are using <strong>professional Medicare rates</strong> for comparison.
+                                </p>
+                            {% elif 'institutional' in billing_class_str or 'inst' in billing_class_str %}
+                                <p class="mb-0">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    This data has an <strong>institutional billing class</strong>, so we are using <strong>ASC Medicare and OPPS Medicare rates</strong> for comparison.
+                                </p>
+                            {% else %}
+                                <p class="mb-0">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Billing Class: 
+                                    {% for bc in metrics.billing_class.values %}
+                                        <span class="badge bg-secondary">{{ bc }}</span>{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </p>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-light mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary"><i class="bi bi-building me-2"></i>Organizations</h6>
+                                <ul class="list-unstyled mb-0 small">
+                                    <li><strong>Unique TINs:</strong> {{ metrics.tin_value.count }}</li>
+                                    <li><strong>Unique Organizations:</strong> {{ metrics.tin_org_name.count }}</li>
+                                    <li><strong>States Covered:</strong> {{ metrics.tin_state.count }}</li>
+                                    <li><strong>Cities Covered:</strong> {{ metrics.tin_city.count }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary"><i class="bi bi-people me-2"></i>Providers</h6>
+                                <ul class="list-unstyled mb-0 small">
+                                    <li><strong>Unique NPIs:</strong> {{ metrics.npi.count }}</li>
+                                    <li><strong>Negotiation Types:</strong> {{ metrics.negotiated_type.count }}</li>
+                                    <li><strong>Negotiation Arrangements:</strong> {{ metrics.negotiation_arrangement.count }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-show the modal when the page loads (only if metrics exist)
+document.addEventListener('DOMContentLoaded', function() {
+    const dataSummaryModal = new bootstrap.Modal(document.getElementById('dataSummaryModal'));
+    dataSummaryModal.show();
+});
+</script>
+{% endif %}
+
 {% endblock %}
