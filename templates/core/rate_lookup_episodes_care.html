@@ -7,14 +7,29 @@
 <style>
     .episode-card {
         border-radius: 15px;
-        border: none;
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        border: 2px solid #e0e0e0;
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
         cursor: pointer;
+        position: relative;
     }
     
     .episode-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        border-color: #007bff;
+    }
+    
+    .episode-card:hover::after {
+        content: "Click to view tiles →";
+        position: absolute;
+        bottom: 10px;
+        right: 15px;
+        background: rgba(0, 123, 255, 0.9);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 0.75rem;
+        font-weight: bold;
     }
     
     .episode-card.selected {
@@ -130,22 +145,22 @@
         </div>
     </div>
 
-    <!-- Episode Selection Form -->
-    <div class="row mb-4">
+    <!-- Episode Selection -->
+    {% if not selected_episode %}
+    <div class="row mb-4" id="episodeSelectionSection">
         <div class="col-12">
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>How it works:</strong> Click on any episode card below to instantly view all available market rate tiles containing the associated billing codes for that episode.
+            </div>
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <i class="bi bi-search me-2"></i>Select Episode for Market Rate Analysis
+                        <i class="bi bi-cursor me-2"></i>Click an Episode to View Available Market Rate Data
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" id="episodeForm">
-                        {% csrf_token %}
-                        <input type="hidden" id="selected_episode_id" name="episode_id">
-                        <input type="hidden" id="selected_episode_type" name="episode_type">
-                        
-                        <div class="tab-content" id="episodeTypeTabsContent">
+                    <div class="tab-content" id="episodeTypeTabsContent">
                             <!-- All Episodes -->
                             <div class="tab-pane fade show active" id="all" role="tabpanel">
                                 <div class="row">
@@ -330,27 +345,25 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="text-center mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg" id="analyzeButton" disabled>
-                                <i class="bi bi-search me-2"></i>Analyze Market Rates
-                            </button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Selected Episode Details -->
     {% if selected_episode %}
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header bg-success text-white">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="bi bi-check-circle me-2"></i>Selected Episode: {{ selected_episode.episode_name }}
                     </h5>
+                    <a href="{% url 'rate_lookup_episodes_care' %}" class="btn btn-light btn-sm">
+                        <i class="bi bi-arrow-left me-1"></i>Back to Episodes
+                    </a>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -396,17 +409,24 @@
 
     <!-- Search Results -->
     {% if search_results %}
-    <div class="row mb-3">
+    <div class="row mb-3" id="tilesResultsSection">
         <div class="col-12">
             <h4 class="fw-bold text-primary mb-3">
                 <i class="bi bi-list-ul me-2"></i>Market Rate Data Available
                 <span class="badge bg-success ms-2">{{ search_results|length }} tile{{ search_results|length|pluralize }}</span>
             </h4>
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
+            {% if search_results|length > 0 %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
                 <strong>Found {{ search_results|length }} matching tile{{ search_results|length|pluralize }}!</strong> 
                 Click "Analyze This Tile" on any result below to view detailed rate data and export to CSV.
             </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>No tiles found</strong> containing the billing codes from this episode.
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -486,49 +506,24 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        let selectedEpisode = null;
-        let selectedType = null;
-        
-        // Episode card selection
+        // Episode card selection - now navigates immediately
         document.querySelectorAll('.episode-card').forEach(card => {
             card.addEventListener('click', function() {
-                // Remove previous selection
-                document.querySelectorAll('.episode-card').forEach(c => c.classList.remove('selected'));
+                const episodeId = this.dataset.episodeId;
+                const episodeType = this.dataset.episodeType;
                 
-                // Add selection to clicked card
-                this.classList.add('selected');
-                
-                // Update form fields
-                selectedEpisode = this.dataset.episodeId;
-                selectedType = this.dataset.episodeType;
-                
-                document.getElementById('selected_episode_id').value = selectedEpisode;
-                document.getElementById('selected_episode_type').value = selectedType;
-                
-                // Enable analyze button
-                document.getElementById('analyzeButton').disabled = false;
+                // Navigate to the same page with GET parameters to show tiles
+                window.location.href = '?episode_id=' + encodeURIComponent(episodeId) + '&episode_type=' + encodeURIComponent(episodeType);
             });
         });
         
-        // Form submission
-        document.getElementById('episodeForm').addEventListener('submit', function(e) {
-            if (!selectedEpisode || !selectedType) {
-                e.preventDefault();
-                alert('Please select an episode first.');
-                return;
-            }
-        });
-        
-        // Tab switching
-        document.querySelectorAll('[data-bs-toggle="pill"]').forEach(tab => {
-            tab.addEventListener('shown.bs.tab', function() {
-                // Clear selection when switching tabs
-                document.querySelectorAll('.episode-card').forEach(c => c.classList.remove('selected'));
-                document.getElementById('analyzeButton').disabled = true;
-                selectedEpisode = null;
-                selectedType = null;
-            });
-        });
+        // If tiles results are shown, scroll to them smoothly
+        const resultsSection = document.getElementById('tilesResultsSection');
+        if (resultsSection) {
+            setTimeout(function() {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
     });
 </script>
 {% endblock %}

@@ -2308,41 +2308,41 @@ def rate_lookup_episodes_care(request):
         episode_templates = lookup.get_episode_templates()
         context['episode_templates'] = episode_templates
         
-        # Handle episode selection and code search
-        if request.method == 'POST':
-            episode_id = request.POST.get('episode_id')
-            episode_type = request.POST.get('episode_type')
-            selected_codes = request.POST.getlist('selected_codes')
-            
-            if episode_id and episode_type:
-                # Find the selected episode
-                selected_episode = None
-                if episode_type in episode_templates:
-                    for episode in episode_templates[episode_type]:
-                        if episode['episode_id'] == episode_id:
-                            selected_episode = episode
-                            break
-                
-                if selected_episode:
-                    context['selected_episode'] = selected_episode
-                    
-                    # Get all codes from the episode
-                    all_codes = []
-                    if selected_episode.get('codes_required'):
-                        all_codes.extend(selected_episode['codes_required'])
-                    if selected_episode.get('codes_optional'):
-                        all_codes.extend(selected_episode['codes_optional'])
-                    if selected_episode.get('codes'):
-                        all_codes.extend(selected_episode['codes'])
-                    
-                    # Search S3 tiles for these codes
-                    if all_codes:
-                        search_results = lookup.search_s3_tiles_by_codes(billing_codes=all_codes)
-                        context['search_results'] = search_results
-                        context['selected_codes'] = all_codes
+        # Handle episode selection (now via GET parameters)
+        episode_id = request.GET.get('episode_id')
+        episode_type = request.GET.get('episode_type')
         
-        # Handle direct code search
-        if request.method == 'GET':
+        if episode_id and episode_type:
+            # Find the selected episode
+            selected_episode = None
+            if episode_type in episode_templates:
+                for episode in episode_templates[episode_type]:
+                    if episode['episode_id'] == episode_id:
+                        selected_episode = episode
+                        break
+            
+            if selected_episode:
+                context['selected_episode'] = selected_episode
+                
+                # Get all codes from the episode
+                all_codes = []
+                if selected_episode.get('codes_required'):
+                    all_codes.extend(selected_episode['codes_required'])
+                if selected_episode.get('codes_optional'):
+                    all_codes.extend(selected_episode['codes_optional'])
+                if selected_episode.get('codes'):
+                    all_codes.extend(selected_episode['codes'])
+                if selected_episode.get('rehab_codes'):
+                    all_codes.extend(selected_episode['rehab_codes'])
+                
+                # Search S3 tiles for these codes
+                if all_codes:
+                    search_results = lookup.search_s3_tiles_by_codes(billing_codes=all_codes)
+                    context['search_results'] = search_results
+                    context['selected_codes'] = all_codes
+        
+        # Handle direct code search (only if not selecting an episode)
+        elif request.method == 'GET':
             billing_codes = request.GET.getlist('billing_codes')
             taxonomy_codes = request.GET.getlist('taxonomy_codes')
             
