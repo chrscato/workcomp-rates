@@ -245,12 +245,16 @@
                                         <i class="bi bi-file-earmark-text me-2"></i>{{ tile.payer_slug }}
                                     </h6>
                                     <ul class="list-unstyled small">
+                                        <li><strong>TIN:</strong> {{ tile.tin_value }}</li>
+                                        <li><strong>Organization:</strong> {{ tile.organization_name|default:"N/A" }}</li>
+                                        <li><strong>Location:</strong> {% if tile.city and tile.state %}{{ tile.city }}, {{ tile.state }}{% else %}N/A{% endif %}</li>
                                         <li><strong>Billing Class:</strong> {{ tile.billing_class }}</li>
+                                        <li><strong>Negotiated Type:</strong> {{ tile.negotiated_type }}</li>
+                                        <li><strong>Negotiation Arrangement:</strong> {{ tile.negotiation_arrangement }}</li>
                                         <li><strong>Procedure Set:</strong> {{ tile.proc_set }}</li>
                                         <li><strong>Procedure Class:</strong> {{ tile.proc_class }}</li>
                                         <li><strong>Procedure Group:</strong> {{ tile.proc_group }}</li>
                                         <li><strong>Rows:</strong> {{ tile.row_count|floatformat:0 }}</li>
-                                        <li><strong>Created:</strong> {{ tile.created_at_utc }}</li>
                                     </ul>
                                     {% if tile.billing_codes_json %}
                                     <div class="mt-2">

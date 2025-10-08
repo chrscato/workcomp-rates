@@ -155,13 +155,16 @@
                     <div class="row mb-3">
                         <div class="col-6">
                             <ul class="list-unstyled small">
+                                <li><strong>TIN:</strong> {{ result.tin_value }}</li>
+                                <li><strong>Organization:</strong> {{ result.organization_name|default:"N/A" }}</li>
+                                <li><strong>Location:</strong> {% if result.city and result.state %}{{ result.city }}, {{ result.state }}{% else %}N/A{% endif %}</li>
                                 <li><strong>Billing Class:</strong> {{ result.billing_class }}</li>
-                                <li><strong>Negotiation:</strong> {{ result.negotiated_type }}</li>
-                                <li><strong>Arrangement:</strong> {{ result.negotiation_arrangement }}</li>
+                                <li><strong>Negotiated Type:</strong> {{ result.negotiated_type }}</li>
                             </ul>
                         </div>
                         <div class="col-6">
                             <ul class="list-unstyled small">
+                                <li><strong>Negotiation Arrangement:</strong> {{ result.negotiation_arrangement }}</li>
                                 <li><strong>Procedure Set:</strong> {{ result.proc_set }}</li>
                                 <li><strong>Procedure Class:</strong> {{ result.proc_class }}</li>
                                 <li><strong>Procedure Group:</strong> {{ result.proc_group }}</li>
@@ -202,12 +205,7 @@
                     {% endif %}
                     
                     <div class="row">
-                        <div class="col-6">
-                            <small class="text-muted">
-                                <i class="bi bi-calendar me-1"></i>{{ result.created_at_utc }}
-                            </small>
-                        </div>
-                        <div class="col-6 text-end">
+                        <div class="col-12 text-end">
                             <small class="text-muted">
                                 <i class="bi bi-hdd me-1"></i>{{ result.parts_count }} part{{ result.parts_count|pluralize }}
                             </small>

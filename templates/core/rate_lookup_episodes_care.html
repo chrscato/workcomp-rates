@@ -20,7 +20,7 @@
     }
     
     .episode-card:hover::after {
-        content: "Click to view tiles →";
+        content: "Click to view data →";
         position: absolute;
         bottom: 10px;
         right: 15px;
@@ -440,12 +440,15 @@
                         <span class="badge bg-success float-end">{{ result.row_count|floatformat:0 }} rows</span>
                     </h6>
                     <ul class="list-unstyled small">
+                        <li><strong>TIN:</strong> {{ result.tin_value }}</li>
+                        <li><strong>Organization:</strong> {{ result.organization_name|default:"N/A" }}</li>
+                        <li><strong>Location:</strong> {% if result.city and result.state %}{{ result.city }}, {{ result.state }}{% else %}N/A{% endif %}</li>
                         <li><strong>Billing Class:</strong> {{ result.billing_class }}</li>
                         <li><strong>Procedure Set:</strong> {{ result.proc_set }}</li>
                         <li><strong>Procedure Class:</strong> {{ result.proc_class }}</li>
                         <li><strong>Procedure Group:</strong> {{ result.proc_group }}</li>
-                        <li><strong>Negotiation:</strong> {{ result.negotiated_type }}</li>
-                        <li><strong>Created:</strong> {{ result.created_at_utc }}</li>
+                        <li><strong>Negotiated Type:</strong> {{ result.negotiated_type }}</li>
+                        <li><strong>Negotiation Arrangement:</strong> {{ result.negotiation_arrangement }}</li>
                     </ul>
                     
                     {% if result.billing_codes_json %}

@@ -93,6 +93,21 @@ class MarketRateLookup:
         cursor = conn.cursor()
         
         try:
+            # Get TIN organization name
+            cursor.execute("SELECT organization_name FROM dim_tin WHERE tin_value = ?", (tin_value,))
+            tin_row = cursor.fetchone()
+            organization_name = tin_row[0] if tin_row else None
+            
+            # Get TIN primary location
+            cursor.execute("""
+                SELECT city, state 
+                FROM dim_tin_location 
+                WHERE tin_value = ? AND primary_flag = 1
+            """, (tin_value,))
+            location_row = cursor.fetchone()
+            city = location_row[0] if location_row else None
+            state = location_row[1] if location_row else None
+            
             query = """
                 SELECT 
                     payer_slug,
@@ -158,7 +173,11 @@ class MarketRateLookup:
                     'billing_codes_json': json.loads(row[10]) if row[10] else [],
                     'taxonomy_codes_json': taxonomy_codes_raw,  # Keep original codes
                     'taxonomy_display_names': taxonomy_display_names,  # Add display names
-                    'created_at_utc': row[12]
+                    'created_at_utc': row[12],
+                    'tin_value': tin_value,
+                    'organization_name': organization_name,
+                    'city': city,
+                    'state': state
                 }
                 tiles.append(tile)
             
@@ -339,13 +358,29 @@ class MarketRateLookup:
                         display_name = taxonomy_mapping.get(code, code)
                         taxonomy_display_names.append(display_name)
                 
+                # Get TIN organization name
+                tin_value = row[5]
+                cursor.execute("SELECT organization_name FROM dim_tin WHERE tin_value = ?", (tin_value,))
+                tin_row = cursor.fetchone()
+                organization_name = tin_row[0] if tin_row else None
+                
+                # Get TIN primary location
+                cursor.execute("""
+                    SELECT city, state 
+                    FROM dim_tin_location 
+                    WHERE tin_value = ? AND primary_flag = 1
+                """, (tin_value,))
+                location_row = cursor.fetchone()
+                city = location_row[0] if location_row else None
+                state = location_row[1] if location_row else None
+                
                 result = {
                     'run_id': row[0],
                     'payer_slug': row[1],
                     'billing_class': row[2],
                     'negotiation_arrangement': row[3],
                     'negotiated_type': row[4],
-                    'tin_value': row[5],
+                    'tin_value': tin_value,
                     'proc_set': row[6],
                     'proc_class': row[7],
                     'proc_group': row[8],
@@ -355,7 +390,10 @@ class MarketRateLookup:
                     'billing_codes_json': json.loads(row[12]) if row[12] else [],
                     'taxonomy_codes_json': taxonomy_codes_raw,  # Keep original codes
                     'taxonomy_display_names': taxonomy_display_names,  # Add display names
-                    'created_at_utc': row[14]
+                    'created_at_utc': row[14],
+                    'organization_name': organization_name,
+                    'city': city,
+                    'state': state
                 }
                 results.append(result)
             

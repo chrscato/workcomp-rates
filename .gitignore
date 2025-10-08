@@ -76,3 +76,4 @@ logs/
 *.backup
 server-pass.txt
 *.sqlite
+db_backups/
